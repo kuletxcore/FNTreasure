@@ -13,22 +13,27 @@ android {
         applicationId = "com.kuletx.forttreasure"
         minSdk = 26
         targetSdk = 36
-        versionCode = 151
-        versionName = "1.5.1"
+        versionCode = 160
+        versionName = "1.6.0"
     }
 
+    // AI Studio decodes debug.keystore.base64 into debug.keystore before building: debug builds then use that key.
+    // Where the file doesn't exist (GitHub Actions, a fresh clone), the standard debug key is used instead.
+    val aiStudioDebugKeystore = file("${rootDir}/debug.keystore")
     signingConfigs {
-        create("debugConfig") {
-            storeFile = file("${rootDir}/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+        if (aiStudioDebugKeystore.exists()) {
+            create("debugConfig") {
+                storeFile = aiStudioDebugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
         }
     }
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("debugConfig")
+            signingConfigs.findByName("debugConfig")?.let { signingConfig = it }
         }
         release {
             isMinifyEnabled = false

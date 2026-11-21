@@ -6,6 +6,11 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      release:
+        description: 'Publish a GitHub Release with this tag (e.g. v1.6.0); leave empty for a plain build'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -56,11 +61,11 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
 
       - name: Build Release APK & AAB (tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release != ''
         run: gradle :app:assembleRelease :app:bundleRelease --stacktrace
 
       - name: Sign & attach release artifacts (tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release != ''
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -86,8 +91,10 @@ jobs:
           fi
 
       - name: Attach release APK to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.release || github.ref_name }}
+          target_commitish: ${{ github.sha }}
           files: release-dist/*.apk
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
