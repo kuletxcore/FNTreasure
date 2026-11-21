@@ -13,9 +13,6 @@ data class FortniteStatus(
 )
 
 object FortniteLauncher {
-    const val ANDROID_DEMOS_HINT =
-        "Android/data/${AppInfo.FORTNITE_PACKAGE}/files/UE4Game/FortniteGame/FortniteGame/Saved/Demos"
-
     fun status(context: Context): FortniteStatus {
         return try {
             val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

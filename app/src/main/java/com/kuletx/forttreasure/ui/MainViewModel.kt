@@ -24,7 +24,6 @@ import com.kuletx.forttreasure.domain.OverlayView
 import com.kuletx.forttreasure.domain.Profile
 import com.kuletx.forttreasure.domain.Profiles
 import com.kuletx.forttreasure.domain.ReportExporter
-import com.kuletx.forttreasure.domain.ScanProgress
 import com.kuletx.forttreasure.domain.TrackerView
 import com.kuletx.forttreasure.domain.TreasureCatalog
 import com.kuletx.forttreasure.domain.TreasureFindDto
@@ -52,7 +51,6 @@ data class MainUiState(
     val currentProfile: Profile? = null,
     val notices: List<Notice> = emptyList(),
     val activityLog: List<ActivityLogEntry> = emptyList(),
-    val scanProgress: ScanProgress? = null,
     val nowUtc: Instant = Instant.now(),
     val fortniteStatus: FortniteStatus = FortniteStatus(false, null),
     val overlayPreviewState: OverlayPreviewState = OverlayPreviewState.IDLE,
@@ -70,7 +68,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repo = AppContainer.repository(application)
     private val settings = repo.settings
 
-    private val scanProgressFlow = MutableStateFlow<ScanProgress?>(null)
     private val overlayPreviewStateFlow = MutableStateFlow(OverlayPreviewState.IDLE)
     private val estimateStateFlow = MutableStateFlow<Pair<ChestEstimate.Result?, String?>>(null to null)
     private val errorLogFlow = MutableStateFlow("")
@@ -103,7 +100,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private data class AuxiliaryState(
-        val progress: ScanProgress?,
         val now: Instant,
         val fortnite: FortniteStatus,
         val preview: OverlayPreviewState,
@@ -116,13 +112,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     private val auxFlow = combine(
-        scanProgressFlow,
         tickerFlow,
         fortniteStatusFlow,
         overlayPreviewStateFlow,
         estimateStateFlow,
-    ) { prog, now, fn, preview, est ->
-        AuxiliaryState(prog, now, fn, preview, est, "", catalogRevFlow.value, null, false, false)
+    ) { now, fn, preview, est ->
+        AuxiliaryState(now, fn, preview, est, "", catalogRevFlow.value, null, false, false)
     }.combine(
         combine(
             errorLogFlow,
@@ -181,7 +176,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             currentProfile = current,
             notices = notices,
             activityLog = log,
-            scanProgress = aux.progress,
             nowUtc = aux.now,
             fortniteStatus = aux.fortnite,
             overlayPreviewState = aux.preview,
@@ -502,36 +496,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     "Catálogo al día (rev. ${TreasureCatalog.data.revision})",
                 )
             }
-        }
-    }
-
-    fun onReplaysFolderSelected(uri: Uri?) {
-        if (uri == null) return
-        repo.persistTreePermission(uri)
-        val uriStr = uri.toString()
-        val lang = uiState.value.config.language
-        viewModelScope.launch {
-            settings.setDemosTreeUri(uriStr)
-            repo.scanSavedDemosFolder(uriStr, lang) { scanProgressFlow.value = it }
-            errorLogFlow.value = repo.readErrorLog()
-        }
-    }
-
-    fun rescanSavedDemosFolder() {
-        val uriStr = uiState.value.config.demosTreeUri ?: return
-        val lang = uiState.value.config.language
-        viewModelScope.launch {
-            repo.scanSavedDemosFolder(uriStr, lang) { scanProgressFlow.value = it }
-            errorLogFlow.value = repo.readErrorLog()
-        }
-    }
-
-    fun importReplayFiles(uris: List<Uri>) {
-        if (uris.isEmpty()) return
-        val lang = uiState.value.config.language
-        viewModelScope.launch {
-            repo.scanReplayUris(uris, lang) { scanProgressFlow.value = it }
-            errorLogFlow.value = repo.readErrorLog()
         }
     }
 

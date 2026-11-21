@@ -26,7 +26,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -90,8 +89,6 @@ fun HomeScreen(
     onStartNewSession: () -> Unit,
     onUpdateMatchDetails: (sessionId: String, chestsOpened: Int, treasures: List<TreasureFindDto>, matchNumber: Int?, sessionNumber: Int?) -> Unit,
     onDeleteMatch: (String) -> Unit,
-    onPickReplays: () -> Unit,
-    onPickDemosFolder: () -> Unit,
     onImportDataJson: () -> Unit,
     onRefreshCatalog: () -> Unit,
     onLaunchExperienceBr: () -> Unit,
@@ -140,9 +137,9 @@ fun HomeScreen(
                 Text(
                     text = L.t(
                         lang,
-                        "Active d'abord les rediffusions dans Fortnite : Paramètres → Jeu → Rediffusions → Enregistrer les rediffusions. Sur Android, importe tes fichiers .replay ou data.json, ou lance Battle Royale (experience_br) directement depuis ici. Des coffres ouverts avant ? Le crayon de « Coffres au total » permet de les ajouter.",
-                        "First turn on replays in Fortnite: Settings → Game → Replays → Record Replays. On Android, import your .replay files or desktop data.json, or launch Battle Royale (experience_br) directly from here. Chests opened before? The pencil on \"Chests in total\" adds them.",
-                        "Primero activa las repeticiones en Fortnite: Ajustes → Juego → Repeticiones → Grabar repeticiones. En Android, importa tus archivos .replay o data.json, o abre Battle Royale (experience_br) desde aquí. ¿Cofres abiertos antes? El lápiz de «Cofres en total» permite añadirlos.",
+                        "Fortnite sur Android ne prend pas en charge l'enregistrement de rediffusions (.replay). Lance Battle Royale (experience_br) depuis ici et compte tes coffres et trésors avec le suivi en direct ou l'overlay flottant, ou importe un fichier data.json depuis la version PC. Des coffres ouverts avant ? Le crayon de « Coffres au total » permet de les ajouter.",
+                        "Fortnite on Android does not record .replay files. Launch Battle Royale (experience_br) from here and track your chests and treasures with the live match counter or floating overlay, or import a data.json file from the PC app. Chests opened before? The pencil on \"Chests in total\" adds them.",
+                        "Fortnite en Android no permite grabar repeticiones (.replay). Abre Battle Royale (experience_br) desde aquí y cuenta tus cofres y tesoros con el seguimiento en vivo o el overlay flotante, o importa un archivo data.json desde la versión de PC. ¿Cofres abiertos antes? El lápiz de «Cofres en total» permite añadirlos.",
                     ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = CardInk,
@@ -189,23 +186,6 @@ fun HomeScreen(
                     text = L.t(lang, "C'est parti !", "Let's go!", "¡Vamos!"),
                     onClick = onDismissWelcome,
                     modifier = Modifier.testTag("dismiss_welcome_button"),
-                )
-            }
-        }
-
-        // Scan Progress Banner
-        state.scanProgress?.let { prog ->
-            ParchmentCard {
-                Text(
-                    text = "${L.t(lang, "Analyse de tes replays…", "Analyzing your replays…", "Analizando tus repeticiones…")} ${prog.done} / ${prog.total}",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { if (prog.total > 0) prog.done.toFloat() / prog.total else 0f },
-                    color = AccentGold,
-                    trackColor = CardLine,
-                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
                 )
             }
         }
@@ -350,9 +330,9 @@ fun HomeScreen(
                     badgeText = L.t(lang, "imprécis", "inaccurate", "impreciso"),
                     infoText = L.t(
                         lang,
-                        "Compté dans TES replays : un coffre ouvert par un coéquipier à plus de 150 m de toi n'y est pas, et rien n'est enregistré après ton départ de la partie.",
-                        "Counted in YOUR replays: a chest a teammate opens more than 150 m away from you is not in them, and nothing is recorded once you leave the match.",
-                        "Contado en TUS repeticiones: un cofre que un compañero abre a más de 150 m de ti no está en ellas, y no se graba nada después de que salgas de la partida.",
+                        "Issu des parties PC importées : un coffre ouvert par un coéquipier à plus de 150 m de toi n'y est pas, et rien n'est enregistré après ton départ de la partie.",
+                        "From imported PC matches: a chest a teammate opens more than 150 m away from you is not included, and nothing is recorded once you leave the match.",
+                        "De partidas importadas de PC: un cofre que un compañero abre a más de 150 m de ti no se incluye, y no se graba nada después de que salgas de la partida.",
                     ),
                     lang = lang,
                     modifier = Modifier.weight(1f),
@@ -370,16 +350,6 @@ fun HomeScreen(
                 text = L.t(lang, "Ouvrir le rapport", "Open the report", "Abrir el informe"),
                 onClick = onOpenReport,
                 modifier = Modifier.testTag("open_report_button"),
-            )
-            LogbookSecondaryButton(
-                text = L.t(lang, "Importer .replay", "Import .replay", "Importar .replay"),
-                onClick = onPickReplays,
-                modifier = Modifier.testTag("import_replays_button"),
-            )
-            LogbookSecondaryButton(
-                text = L.t(lang, "Dossier replays", "Replays folder", "Carpeta repeticiones"),
-                onClick = onPickDemosFolder,
-                modifier = Modifier.testTag("pick_demos_folder_button"),
             )
             LogbookSecondaryButton(
                 text = L.t(lang, "Importer data.json", "Import data.json", "Importar data.json"),
@@ -465,9 +435,9 @@ fun HomeScreen(
                 Text(
                     text = L.t(
                         lang,
-                        "Rien pour l'instant. Utilise le compteur en direct, l'overlay ou importe des fichiers .replay.",
-                        "Nothing yet. Use the live match tracker, floating overlay, or import .replay files.",
-                        "Nada por ahora. Usa el contador en vivo, el overlay o importa archivos .replay.",
+                        "Rien pour l'instant. Utilise le compteur en direct, l'overlay flottant ou importe un fichier data.json.",
+                        "Nothing yet. Use the live match tracker, floating overlay, or import a data.json file.",
+                        "Nada por ahora. Usa el contador en vivo, el overlay flotante o importa un archivo data.json.",
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = CardMuted,

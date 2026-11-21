@@ -1,12 +1,7 @@
 package com.kuletx.forttreasure.data.local
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
-import android.provider.OpenableColumns
-import androidx.documentfile.provider.DocumentFile
-import com.kuletx.forttreasure.data.ReplayFileParser
-import com.kuletx.forttreasure.data.ReplayParseOutcome
 import com.kuletx.forttreasure.domain.ActivityLevel
 import com.kuletx.forttreasure.domain.ActivityLogEntry
 import com.kuletx.forttreasure.domain.ChestKinds
@@ -16,7 +11,6 @@ import com.kuletx.forttreasure.domain.ManualEntryDto
 import com.kuletx.forttreasure.domain.MatchRecordDto
 import com.kuletx.forttreasure.domain.OverlayModel
 import com.kuletx.forttreasure.domain.Profiles
-import com.kuletx.forttreasure.domain.ScanProgress
 import com.kuletx.forttreasure.domain.TrackerDataJson
 import com.kuletx.forttreasure.domain.TreasureCatalog
 import com.kuletx.forttreasure.domain.TreasureFindDto
@@ -540,126 +534,6 @@ class ChestCounterRepository(
             obtained = obtained,
         )
         json.encodeToString(data)
-    }
-
-    suspend fun scanReplayUris(
-        uris: List<Uri>,
-        lang: String,
-        onProgress: (ScanProgress?) -> Unit,
-    ) = withContext(Dispatchers.IO) {
-        if (uris.isEmpty()) return@withContext
-        val processed = db.processedFileDao().getAll().associateBy { it.fileKey }
-        var added = 0
-        var compressedNoticeShown = false
-        onProgress(ScanProgress(0, uris.size))
-
-        uris.forEachIndexed { idx, uri ->
-            val name = queryDisplayName(uri) ?: "replay_${idx + 1}.replay"
-            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            if (bytes != null) {
-                val key = "$name|${bytes.size}"
-                if (!processed.containsKey(key)) {
-                    when (val outcome = ReplayFileParser.parse(name, bytes, lang)) {
-                        is ReplayParseOutcome.Parsed -> {
-                            val m = outcome.match
-                            val whenMs = (L.parseUtc(m.matchStartUtc) ?: Instant.now()).toEpochMilli()
-                            db.matchDao().upsert(
-                                MatchEntity(
-                                    sessionId = outcome.sessionId,
-                                    profileKey = Profiles.key(m),
-                                    matchStartEpochMs = whenMs,
-                                    payloadJson = json.encodeToString(m),
-                                )
-                            )
-                            db.processedFileDao().upsert(ProcessedFileEntity(key, outcome.sessionId))
-                            added++
-                            if (outcome.hasCompressedDataChunks && !compressedNoticeShown) {
-                                compressedNoticeShown = true
-                                log(
-                                    L.t(
-                                        lang,
-                                        "$name : en-tête et classement lus (coffres en ReplayData compressé Oodle : modifie ou importe data.json pour le détail complet)",
-                                        "$name: header & placement parsed (chest actors use Oodle-compressed ReplayData; edit match chests or import desktop data.json)",
-                                        "$name: cabecera y puesto leídos (cofres en ReplayData comprimido Oodle; edita o importa data.json)",
-                                    ),
-                                    ActivityLevel.WARN,
-                                )
-                            } else {
-                                log(
-                                    L.t(
-                                        lang,
-                                        "$name : partie ajoutée",
-                                        "$name: match added",
-                                        "$name: partida añadida",
-                                    ),
-                                    ActivityLevel.OK,
-                                )
-                            }
-                        }
-                        is ReplayParseOutcome.Skipped -> {
-                            db.processedFileDao().upsert(ProcessedFileEntity(key, "skipped"))
-                            log("$name: ${outcome.reason}", ActivityLevel.MUTED)
-                        }
-                        is ReplayParseOutcome.Failed -> {
-                            db.processedFileDao().upsert(ProcessedFileEntity(key, "error: ${outcome.error}"))
-                            appendErrorLog(name, outcome.error)
-                            log("$name: ${outcome.error}", ActivityLevel.ERR)
-                        }
-                    }
-                }
-            }
-            onProgress(ScanProgress(idx + 1, uris.size))
-        }
-        onProgress(null)
-        if (added == 0 && uris.isNotEmpty()) {
-            log(
-                L.t(lang, "Aucun nouveau replay trouvé.", "No new replay found.", "No se encontraron repeticiones nuevas."),
-                ActivityLevel.INFO,
-            )
-        }
-    }
-
-    suspend fun scanSavedDemosFolder(
-        treeUriString: String,
-        lang: String,
-        onProgress: (ScanProgress?) -> Unit,
-    ) = withContext(Dispatchers.IO) {
-        val treeUri = runCatching { Uri.parse(treeUriString) }.getOrNull() ?: return@withContext
-        val dir = DocumentFile.fromTreeUri(context, treeUri) ?: return@withContext
-        val replayUris = dir.listFiles()
-            .filter { it.isFile && (it.name?.endsWith(".replay", ignoreCase = true) == true) }
-            .map { it.uri }
-        if (replayUris.isEmpty()) {
-            log(
-                L.t(
-                    lang,
-                    "Aucun fichier .replay dans ce dossier.",
-                    "No .replay files found in this folder.",
-                    "No hay archivos .replay en esta carpeta.",
-                ),
-                ActivityLevel.WARN,
-            )
-            return@withContext
-        }
-        scanReplayUris(replayUris, lang, onProgress)
-    }
-
-    fun persistTreePermission(uri: Uri) {
-        try {
-            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-            context.contentResolver.takePersistableUriPermission(uri, flags)
-        } catch (_: Exception) {
-        }
-    }
-
-    private fun queryDisplayName(uri: Uri): String? {
-        return try {
-            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
-                if (c.moveToFirst()) c.getString(0) else null
-            }
-        } catch (_: Exception) {
-            uri.lastPathSegment
-        }
     }
 
     suspend fun clearAllData(lang: String) {

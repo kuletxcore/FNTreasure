@@ -150,7 +150,7 @@ Follow these exact steps when building a signed release APK or Play Store AAB fo
 
 ## 4. Architecture & File Map (`app/src/main/java/com/kuletx/forttreasure/`)
 
-- **`MainActivity.kt`**: Edge-to-edge `ComponentActivity`, SAF document launchers (`.replay`, folder tree, `data.json`, CSV/JSON/HTML export), `ON_RESUME` lifecycle refresh for `canDrawOverlays` and `FortniteLauncher`.
+- **`MainActivity.kt`**: Edge-to-edge `ComponentActivity`, SAF document launchers (`data.json`, CSV/JSON/HTML export), `ON_RESUME` lifecycle refresh for `canDrawOverlays` and `FortniteLauncher`.
 - **`domain/`** (Pure Kotlin business logic & DTOs):
   - `Models.kt`: Desktop-compatible `TrackerDataJson`, `MatchRecordDto` (including optional `SessionNumber` / `MatchNumber` / `Notes`), `ChestRecordDto`, `TreasureFindDto`, `ManualEntryDto`, `LiveMatchState`, `AppConfig`, `AppInfo` (`REPO`, `UPSTREAM_REPO`, `CONTENT_URL`, `UPSTREAM_CONTENT_URL`, `FORTNITE_PACKAGE`, `EXPERIENCE_BR_URL`).
   - `TreasureCatalog.kt`: Parses/validates `content.json` (embedded `res/raw/content.json`, cached `filesDir/content.json`, remote GitHub `main` sync), computes `logNever`/`expected`/`percentText`/`verdict`/Treasure Hour countdowns, and maps CDN filenames to bundled `res/drawable/treasure_*.webp`.
@@ -160,7 +160,6 @@ Follow these exact steps when building a signed release APK or Play Store AAB fo
   - `Profiles.kt`, `ChestEstimate.kt`, `ReportExporter.kt` (`matches.csv`, `overlay.html`), `Lang.kt` (`L` localization for `fr`/`en`/`es`, `ChestKinds`, `TreasureNames`).
 - **`data/`**:
   - `FortniteLauncher.kt`: Checks `com.epicgames.fortnite` install state/version via `PackageManager` and opens `https://play.fn.gg/island/experience_br`.
-  - `ReplayFileParser.kt`: Binary Unreal `.replay` parser for `ReplayInfo`, `Header` (`LevelNamesAndTimes`), and `Event` (`TeamStats`/`Stats`) chunks. Note: Oodle Mermaid `ReplayData` actor decompression is omitted on Android; full chest/treasure actor logs are imported from desktop `data.json` or logged via Live Counter / `MatchDetailDialog`.
   - `local/`:
     - `AppContainer.kt`: Process-wide singleton providing one shared `AppDatabase`, `SettingsRepository`, and `ChestCounterRepository` for both `MainViewModel` and `FloatingOverlayService`.
     - `AppDatabase.kt`, `Entities.kt`, `Daos.kt`, `ChestCounterRepository.kt` (includes `incrementLiveChest`, `addLiveTreasure`, `removeLiveTreasure`, `finishLiveMatch`, `resetLiveMatch`, `startNewSession`, `updateMatchDetails`), `SettingsRepository.kt` (Preferences DataStore + `liveMatchFlow` + `sessionNumber`).

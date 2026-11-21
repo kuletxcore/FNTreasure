@@ -118,7 +118,7 @@ fun ReportScreen(
     val session = sessionMatches.sumOf { it.chestsOpened } + liveChests
     val every = if (treasures > 0) ((totalChests + liveChests).toDouble() / treasures).roundToInt() else 0
 
-    // Seen prize IDs in replays auto-tick collection items
+    // Seen prize IDs in recorded matches auto-tick collection items
     val seenPrizeIds = remember(matches) {
         matches.flatMap { it.treasureFinds + it.teamTreasureFinds }
             .mapNotNull { it.prizeId?.lowercase() }
@@ -157,7 +157,7 @@ fun ReportScreen(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             StatTile(
                 value = L.n(lang, matches.size),
-                label = L.t(lang, "parties analysées", "matches analyzed", "partidas analizadas"),
+                label = L.t(lang, "parties enregistrées", "matches recorded", "partidas registradas"),
                 modifier = Modifier.weight(1f),
             )
             StatTile(
@@ -522,7 +522,7 @@ fun ReportScreen(
             ParchmentCard {
                 if (matches.isEmpty()) {
                     Text(
-                        L.t(lang, "Aucune partie analysée pour l'instant.", "No matches analyzed yet.", "Todavía no hay partidas analizadas."),
+                        L.t(lang, "Aucune partie enregistrée pour l'instant.", "No matches recorded yet.", "Todavía no hay partidas registradas."),
                         style = MaterialTheme.typography.bodySmall,
                         color = CardMuted,
                     )

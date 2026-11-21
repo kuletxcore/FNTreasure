@@ -153,11 +153,6 @@ data class ActivityLogEntry(
     val level: ActivityLevel,
 )
 
-data class ScanProgress(
-    val done: Int,
-    val total: Int,
-)
-
 enum class OverlayPreviewState { IDLE, IN_PROGRESS, LIVE }
 
 data class LiveMatchState(
@@ -170,7 +165,6 @@ data class LiveMatchState(
 data class AppConfig(
     val language: String = "en",
     val selectedProfile: String? = null,
-    val demosTreeUri: String? = null,
     val timeZone: String = "local",
     val clockFormat: String = "auto",
     val autoRefreshCatalog: Boolean = true,

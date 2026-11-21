@@ -55,9 +55,9 @@ fun HelpScreen(
             Text(
                 text = L.t(
                     lang,
-                    "Le compteur lit les replays que Fortnite enregistre et compte tes coffres (Battle Royale de la saison seulement, y compris experience_br sur Android). Aucune donnée n'est envoyée : pas de connexion à ton compte Epic, aucune télémétrie.",
-                    "The counter reads Fortnite replay files and counts your chests (regular Battle Royale of the season only, including experience_br on Android). No data is sent: no Epic account login, no telemetry.",
-                    "El contador lee las repeticiones de Fortnite y cuenta tus cofres (solo el Battle Royale de la temporada, incluido experience_br en Android). No se envían datos: sin inicio de sesión de Epic ni telemetría.",
+                    "Suis tes coffres et trésors sur Fortnite Android (experience_br) grâce au compteur de partie en direct et à l'overlay flottant. Aucune donnée n'est envoyée : pas de connexion à ton compte Epic, aucune télémétrie.",
+                    "Track your chests and treasures on Fortnite Android (experience_br) using the live match counter and floating overlay. No data is sent: no Epic account login, no telemetry.",
+                    "Sigue tus cofres y tesoros en Fortnite Android (experience_br) con el contador en vivo y el overlay flotante. No se envían datos: sin inicio de sesión de Epic ni telemetría.",
                 ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = CardInk,
@@ -66,9 +66,9 @@ fun HelpScreen(
             Text(
                 text = L.t(
                     lang,
-                    "Dans Fortnite : Paramètres → Jeu → Rediffusions → Enregistrer les rediffusions. Désactive « Rediffusions de haute qualité » pour éviter les pertes en véhicule.",
-                    "In Fortnite: Settings → Game → Replays → Record Replays. Turn off \"Record High Quality Replays\" to avoid missing chests while driving.",
-                    "En Fortnite: Ajustes → Juego → Repeticiones → Grabar repeticiones. Desactiva «Repeticiones de alta calidad» para evitar pérdidas en vehículo.",
+                    "Fortnite sur Android ne prend pas en charge l'enregistrement ou la lecture des rediffusions (.replay). Tu peux toutefois importer ou exporter ton fichier data.json pour partager ton historique avec la version PC.",
+                    "Fortnite on Android does not support recording or playing replays (.replay). You can still import or export data.json to share your history with the desktop app.",
+                    "Fortnite en Android no permite grabar ni reproducir repeticiones (.replay). Aun así puedes importar o exportar data.json para compartir tu historial con la app de PC.",
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = CardMuted,
@@ -137,9 +137,9 @@ fun HelpScreen(
                 Text(
                     L.t(
                         lang,
-                        "Effacer toutes les parties analysées, les coffres ajoutés à la main et la collection ?",
-                        "Erase all analyzed matches, manual chest entries, and collection ticks?",
-                        "¿Borrar todas las partidas analizadas, los cofres manuales y la colección?",
+                        "Effacer toutes les parties enregistrées, les coffres ajoutés à la main et la collection ?",
+                        "Erase all saved matches, manual chest entries, and collection ticks?",
+                        "¿Borrar todas las partidas guardadas, los cofres manuales y la colección?",
                     )
                 )
             },

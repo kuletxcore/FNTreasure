@@ -50,18 +50,6 @@ class MainActivity : ComponentActivity() {
 
                 var pendingOverlayView by remember { mutableStateOf<OverlayView?>(null) }
 
-                val pickReplaysLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.OpenMultipleDocuments()
-                ) { uris ->
-                    vm.importReplayFiles(uris)
-                }
-
-                val pickDemosFolderLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.OpenDocumentTree()
-                ) { uri ->
-                    vm.onReplaysFolderSelected(uri)
-                }
-
                 val importDataJsonLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.OpenDocument()
                 ) { uri ->
@@ -128,13 +116,6 @@ class MainActivity : ComponentActivity() {
                         pendingOverlayView = ov
                         exportOverlayHtmlLauncher.launch("overlay.html")
                     },
-                    onPickReplays = {
-                        pickReplaysLauncher.launch(arrayOf("application/octet-stream", "*/*"))
-                    },
-                    onPickDemosFolder = {
-                        pickDemosFolderLauncher.launch(null)
-                    },
-                    onRescanDemosFolder = vm::rescanSavedDemosFolder,
                     onImportDataJson = {
                         importDataJsonLauncher.launch(arrayOf("application/json", "*/*"))
                     },

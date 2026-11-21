@@ -122,9 +122,6 @@ fun ChestCounterAppShell(
     onStopFloatingOverlay: () -> Unit,
     onCopyObsHtml: (OverlayView) -> Unit,
     onSaveObsHtml: (OverlayView) -> Unit,
-    onPickReplays: () -> Unit,
-    onPickDemosFolder: () -> Unit,
-    onRescanDemosFolder: () -> Unit,
     onImportDataJson: () -> Unit,
     onRefreshCatalog: () -> Unit,
     onExportCsv: () -> Unit,
@@ -323,8 +320,6 @@ fun ChestCounterAppShell(
                                 onStartNewSession = onStartNewSession,
                                 onUpdateMatchDetails = onUpdateMatchDetails,
                                 onDeleteMatch = onDeleteMatch,
-                                onPickReplays = onPickReplays,
-                                onPickDemosFolder = onPickDemosFolder,
                                 onImportDataJson = onImportDataJson,
                                 onRefreshCatalog = onRefreshCatalog,
                                 onLaunchExperienceBr = onLaunchExperienceBr,
@@ -365,9 +360,6 @@ fun ChestCounterAppShell(
                                 onClockFormatChange = onClockFormatChange,
                                 onProfileChange = onSelectProfile,
                                 onAutoRefreshChange = onAutoRefreshChange,
-                                onPickDemosFolder = onPickDemosFolder,
-                                onRescanDemosFolder = onRescanDemosFolder,
-                                onPickReplays = onPickReplays,
                                 onImportDataJson = onImportDataJson,
                             )
                             AppTab.HELP -> HelpScreen(
@@ -473,11 +465,10 @@ private fun LogbookHeader(
         }
 
         // Status Pill
-        val busy = state.scanProgress != null
-        val pillText = when {
-            busy -> L.t(lang, "Analyse…", "Scanning…", "Analizando…")
-            state.fortniteStatus.isInstalled -> "experience_br"
-            else -> L.t(lang, "Prêt", "Ready", "Listo")
+        val pillText = if (state.fortniteStatus.isInstalled) {
+            "experience_br"
+        } else {
+            L.t(lang, "Prêt", "Ready", "Listo")
         }
         Surface(
             color = ParchmentCard,
@@ -492,7 +483,7 @@ private fun LogbookHeader(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(if (busy) AccentGold else LiveGreen)
+                        .background(LiveGreen)
                 )
                 Text(
                     text = pillText,

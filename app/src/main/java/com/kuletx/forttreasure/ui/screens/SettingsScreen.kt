@@ -31,11 +31,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.kuletx.forttreasure.data.FortniteLauncher
 import com.kuletx.forttreasure.domain.L
 import com.kuletx.forttreasure.ui.MainUiState
 import com.kuletx.forttreasure.ui.components.LogbookPrimaryButton
-import com.kuletx.forttreasure.ui.components.LogbookSecondaryButton
 import com.kuletx.forttreasure.ui.components.ParchmentCard
 import com.kuletx.forttreasure.ui.components.SectionHeading
 import com.kuletx.forttreasure.ui.theme.AccentGold
@@ -54,9 +52,6 @@ fun SettingsScreen(
     onClockFormatChange: (String) -> Unit,
     onProfileChange: (String) -> Unit,
     onAutoRefreshChange: (Boolean) -> Unit,
-    onPickDemosFolder: () -> Unit,
-    onRescanDemosFolder: () -> Unit,
-    onPickReplays: () -> Unit,
     onImportDataJson: () -> Unit,
 ) {
     val lang = state.config.language
@@ -201,43 +196,24 @@ fun SettingsScreen(
             }
         }
 
-        SectionHeading(L.t(lang, "Dossier des replays", "Replays folder", "Carpeta de repeticiones"))
+        SectionHeading(L.t(lang, "Importer depuis le PC", "Import from PC", "Importar desde PC"))
         ParchmentCard {
             Text(
                 text = L.t(
                     lang,
-                    "Sur Android, Fortnite enregistre généralement dans : ${FortniteLauncher.ANDROID_DEMOS_HINT}",
-                    "On Android, Fortnite stores replays under: ${FortniteLauncher.ANDROID_DEMOS_HINT}",
-                    "En Android, Fortnite guarda las repeticiones en: ${FortniteLauncher.ANDROID_DEMOS_HINT}",
+                    "Fortnite sur Android ne permet pas d'enregistrer ou de lire des fichiers .replay. Tu peux tout de même importer ton historique PC en choisissant ton fichier data.json.",
+                    "Fortnite on Android does not record or play .replay files. You can still bring over your PC history by importing a data.json file.",
+                    "Fortnite en Android no permite grabar ni reproducir archivos .replay. Aun así, puedes importar tu historial de PC eligiendo tu archivo data.json.",
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = CardMuted,
             )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = state.config.demosTreeUri ?: L.t(lang, "Aucun dossier sélectionné", "No folder selected", "Ninguna carpeta seleccionada"),
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                color = CardInk,
-            )
             Spacer(Modifier.height(10.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 LogbookPrimaryButton(
-                    text = L.t(lang, "Choisir un dossier", "Choose folder", "Elegir carpeta"),
-                    onClick = onPickDemosFolder,
-                )
-                if (state.config.demosTreeUri != null) {
-                    LogbookSecondaryButton(
-                        text = L.t(lang, "Analyser le dossier", "Scan folder", "Escanear carpeta"),
-                        onClick = onRescanDemosFolder,
-                    )
-                }
-                LogbookSecondaryButton(
-                    text = L.t(lang, "Choisir .replay", "Pick .replay files", "Elegir .replay"),
-                    onClick = onPickReplays,
-                )
-                LogbookSecondaryButton(
                     text = L.t(lang, "Importer data.json", "Import data.json", "Importar data.json"),
                     onClick = onImportDataJson,
+                    modifier = Modifier.testTag("settings_import_data_json_button"),
                 )
             }
         }

@@ -154,4 +154,66 @@ class LiveMatchRepositoryTest {
         assertEquals(1, updated.matchNumber)
         assertEquals(1, updated.sessionNumber)
     }
+
+    @Test
+    fun `importDataJson and exportDataJson preserve desktop schema without replay support`() = runBlocking<Unit> {
+        val desktopJson = """
+            {
+              "Version": 1,
+              "AnalyzerVersion": 17,
+              "CreatedUtc": "2026-04-01T12:00:00Z",
+              "Matches": [
+                {
+                  "SessionId": "pc_sess_1",
+                  "ReplayFile": "UnsavedReplay-2026.04.01.replay",
+                  "AnalyzedAtUtc": "2026-04-01T12:00:00Z",
+                  "MatchStartUtc": "2026-04-01T11:30:00Z",
+                  "Playlist": "experience_br",
+                  "PlayerName": "KuletXCore",
+                  "IsReplayOwner": true,
+                  "ChestsOpened": 11
+                }
+              ],
+              "ProcessedFiles": {
+                "UnsavedReplay-2026.04.01.replay|4096": "pc_sess_1"
+              },
+              "ManualChests": {
+                "KuletXCore": 4
+              },
+              "ManualHistory": {
+                "KuletXCore": [
+                  {
+                    "Id": "m1",
+                    "Chests": 4,
+                    "AddedUtc": "2026-04-01T12:05:00Z",
+                    "Kind": "hand"
+                  }
+                ]
+              },
+              "Obtained": {
+                "KuletXCore": ["w1-jam"]
+              }
+            }
+        """.trimIndent()
+
+        val tempFile = java.io.File(context.cacheDir, "desktop_data.json").apply { writeText(desktopJson) }
+        try {
+            val importedCount = repo.importDataJson(android.net.Uri.fromFile(tempFile), "en")
+            assertEquals(1, importedCount)
+
+            val matches = repo.matchesFlow.first()
+            assertEquals(1, matches.size)
+            assertEquals("pc_sess_1", matches.first().sessionId)
+            assertEquals("UnsavedReplay-2026.04.01.replay", matches.first().replayFile)
+            assertEquals(11, matches.first().chestsOpened)
+
+            val exported = repo.exportDataJson()
+            assertTrue(exported.contains("\"SessionId\": \"pc_sess_1\""))
+            assertTrue(exported.contains("\"ReplayFile\": \"UnsavedReplay-2026.04.01.replay\""))
+            assertTrue(exported.contains("\"ProcessedFiles\""))
+            assertTrue(exported.contains("\"w1-jam\""))
+        } finally {
+            tempFile.delete()
+        }
+    }
 }

@@ -25,7 +25,6 @@ class SettingsRepository(private val context: Context) {
     private object Keys {
         val LANGUAGE = stringPreferencesKey("language")
         val PROFILE = stringPreferencesKey("selected_profile")
-        val DEMOS_TREE_URI = stringPreferencesKey("demos_tree_uri")
         val TIME_ZONE = stringPreferencesKey("time_zone")
         val CLOCK_FORMAT = stringPreferencesKey("clock_format")
         val AUTO_REFRESH = booleanPreferencesKey("auto_refresh_catalog")
@@ -51,7 +50,6 @@ class SettingsRepository(private val context: Context) {
         AppConfig(
             language = prefs[Keys.LANGUAGE] ?: L.systemDefault(),
             selectedProfile = prefs[Keys.PROFILE],
-            demosTreeUri = prefs[Keys.DEMOS_TREE_URI],
             timeZone = prefs[Keys.TIME_ZONE] ?: "local",
             clockFormat = prefs[Keys.CLOCK_FORMAT] ?: "auto",
             autoRefreshCatalog = prefs[Keys.AUTO_REFRESH] ?: true,
@@ -90,12 +88,6 @@ class SettingsRepository(private val context: Context) {
     suspend fun setProfile(profileKey: String?) {
         context.dataStore.edit {
             if (profileKey == null) it.remove(Keys.PROFILE) else it[Keys.PROFILE] = profileKey
-        }
-    }
-
-    suspend fun setDemosTreeUri(uri: String?) {
-        context.dataStore.edit {
-            if (uri.isNullOrBlank()) it.remove(Keys.DEMOS_TREE_URI) else it[Keys.DEMOS_TREE_URI] = uri
         }
     }
 
