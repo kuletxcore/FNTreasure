@@ -22,8 +22,8 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # ubuntu-latest already ships the Android SDK (ANDROID_SDK_ROOT, licenses accepted); Gradle fetches any missing
+      # platform. android-actions/setup-android@v3 failed here: sdkmanager no longer has its default 'tools' package.
 
       - name: Set up Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
