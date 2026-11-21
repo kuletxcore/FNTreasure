@@ -1,6 +1,6 @@
-name: Sync claude branch
+name: Sync claude-main branch
 
-# Keeps the `claude` branch level with main: each push to main fast-forwards it. If `claude` has commits main
+# Keeps the `claude-main` branch level with main: each push to main fast-forwards it. If `claude-main` has commits main
 # doesn't (work not merged yet), it is left alone and the run warns instead of overwriting it.
 on:
   push:
@@ -17,10 +17,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Fast-forward claude to main
+      - name: Fast-forward claude-main to main
         run: |
-          if git push origin HEAD:refs/heads/claude; then
-            echo "claude is now at $(git rev-parse --short HEAD)"
+          if git push origin HEAD:refs/heads/claude-main; then
+            echo "claude-main is now at $(git rev-parse --short HEAD)"
           else
-            echo "::warning::claude has commits main lacks: merge them into main first; claude was not overwritten."
+            echo "::warning::claude-main has commits main lacks: merge them into main first; claude-main was not overwritten."
           fi
