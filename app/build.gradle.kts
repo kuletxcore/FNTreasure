@@ -13,8 +13,8 @@ android {
         applicationId = "com.kuletx.forttreasure"
         minSdk = 26
         targetSdk = 36
-        versionCode = 160
-        versionName = "1.6.0"
+        versionCode = 161
+        versionName = "1.6.1"
     }
 
     // AI Studio decodes debug.keystore.base64 into debug.keystore before building: debug builds then use that key.
