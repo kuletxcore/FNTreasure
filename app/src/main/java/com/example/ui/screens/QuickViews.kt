@@ -34,6 +34,7 @@ import com.example.domain.Pretty
 import com.example.domain.TreasureCatalog
 import com.example.ui.MainUiState
 import com.example.ui.components.CollapsibleSection
+import com.example.ui.components.LiveMatchSessionCard
 import com.example.ui.components.LogbookPrimaryButton
 import com.example.ui.components.LogbookSecondaryButton
 import com.example.ui.components.ParchmentCard
@@ -61,19 +62,27 @@ fun LootTrackerScreen(
     onOpenFullReport: () -> Unit,
     onToggleShowTeamTreasures: (Boolean) -> Unit,
     onToggleObtained: (String, Boolean) -> Unit,
+    onIncrementLiveChest: (Int) -> Unit,
+    onAddLiveTreasure: (itemName: String, prizeId: String?, fromGoldenChest: Boolean) -> Unit,
+    onRemoveLiveTreasure: (Int) -> Unit,
+    onFinishLiveMatch: () -> Unit,
+    onResetLiveMatch: () -> Unit,
+    onStartNewSession: () -> Unit,
 ) {
     val lang = state.config.language
     val view = state.view
     val matches = remember(view.matches) {
         view.matches.sortedByDescending { L.parseUtc(it.matchStartUtc) ?: L.parseUtc(it.analyzedAtUtc) ?: Instant.EPOCH }
     }
-    val totalChests = view.countedChests
-    val treasures = matches.sumOf { it.treasureFinds.size }
+    val liveChests = if (state.liveMatch.active) state.liveMatch.chests else 0
+    val liveTreasures = if (state.liveMatch.active) state.liveMatch.treasures.size else 0
+    val totalChests = view.countedChests + liveChests
+    val treasures = matches.sumOf { it.treasureFinds.size } + liveTreasures
     val teamTreasures = matches.sumOf { it.teamTreasureFinds.size }
     val every = if (treasures > 0) (totalChests.toDouble() / treasures).roundToInt() else 0
 
-    val seenPrizeIds = remember(matches) {
-        matches.flatMap { it.treasureFinds + it.teamTreasureFinds }
+    val seenPrizeIds = remember(matches, state.liveMatch.treasures) {
+        (matches.flatMap { it.treasureFinds + it.teamTreasureFinds } + state.liveMatch.treasures)
             .mapNotNull { it.prizeId?.lowercase() }
             .toSet()
     }
@@ -98,6 +107,16 @@ fun LootTrackerScreen(
     ) {
         SectionHeading(L.t(lang, "Suivi de butin", "Loot Tracker", "Rastreador de botín"))
 
+        LiveMatchSessionCard(
+            state = state,
+            onIncrementChest = onIncrementLiveChest,
+            onAddTreasure = onAddLiveTreasure,
+            onRemoveTreasure = onRemoveLiveTreasure,
+            onFinishMatch = onFinishLiveMatch,
+            onResetLiveMatch = onResetLiveMatch,
+            onStartNewSession = onStartNewSession,
+        )
+
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             val treasureSub = buildList {
                 if (every > 0) add(L.t(lang, "1 tous les ${L.n(lang, every)} coffres", "1 every ${L.n(lang, every)} chests", "1 cada ${L.n(lang, every)} cofres"))
@@ -114,7 +133,7 @@ fun LootTrackerScreen(
             StatTile(
                 value = "$obtainedCount/${allCollectionPrizes.size}",
                 label = L.t(lang, "collection obtenue", "collection obtained", "colección obtenida"),
-                sub = "${L.n(lang, view.totalChests)} ${L.t(lang, "coffres au total", "chests total", "cofres en total")}",
+                sub = "${L.n(lang, view.totalChests + liveChests)} ${L.t(lang, "coffres au total", "chests total", "cofres en total")}",
                 valueColor = TealAccent,
                 modifier = Modifier.weight(1f),
             )

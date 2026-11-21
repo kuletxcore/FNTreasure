@@ -97,14 +97,37 @@ fun OverlayScreen(
             )
         } else null
     }
-    val overlayView = remember(state.view, previewMatch, state.overlayPreviewState, state.config.showSquadTotal, lang) {
-        OverlayModel.build(
-            view = state.view,
-            live = previewMatch,
-            inProgress = state.overlayPreviewState != OverlayPreviewState.IDLE,
-            showSquad = state.config.showSquadTotal,
-            lang = lang,
-        )
+    val overlayView = remember(
+        state.view,
+        state.liveMatch,
+        previewMatch,
+        state.overlayPreviewState,
+        state.config.showSquadTotal,
+        state.config.sessionNumber,
+        state.config.sessionStartedEpochMs,
+        lang,
+    ) {
+        if (previewMatch != null) {
+            OverlayModel.build(
+                view = state.view,
+                live = previewMatch,
+                inProgress = true,
+                showSquad = state.config.showSquadTotal,
+                lang = lang,
+                sessionNumber = state.config.sessionNumber,
+                sessionStartedEpochMs = state.config.sessionStartedEpochMs,
+            )
+        } else {
+            OverlayModel.buildLive(
+                view = state.view,
+                liveMatch = state.liveMatch,
+                inProgressHint = state.overlayPreviewState != OverlayPreviewState.IDLE || state.liveMatch.active,
+                sessionNumber = state.config.sessionNumber,
+                sessionStartedEpochMs = state.config.sessionStartedEpochMs,
+                showSquad = state.config.showSquadTotal,
+                lang = lang,
+            )
+        }
     }
 
     LaunchedEffect(

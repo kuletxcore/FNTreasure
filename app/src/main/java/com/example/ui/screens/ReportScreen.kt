@@ -49,7 +49,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.domain.ChestKinds
 import com.example.domain.L
@@ -57,13 +56,13 @@ import com.example.domain.MatchRecordDto
 import com.example.domain.OverlayModel
 import com.example.domain.Pretty
 import com.example.domain.TreasureCatalog
+import com.example.domain.TreasureFindDto
 import com.example.domain.TreasurePrize
 import com.example.ui.MainUiState
 import com.example.ui.components.CollapsibleSection
 import com.example.ui.components.HeroChestCard
-import com.example.ui.components.InfoDialogButton
-import com.example.ui.components.LogbookPrimaryButton
 import com.example.ui.components.LogbookSecondaryButton
+import com.example.ui.components.MatchDetailDialog
 import com.example.ui.components.ParchmentCard
 import com.example.ui.components.SectionHeading
 import com.example.ui.components.StatTile
@@ -75,17 +74,14 @@ import com.example.ui.theme.CardLine
 import com.example.ui.theme.CardMuted
 import com.example.ui.theme.CardTrack
 import com.example.ui.theme.HeroChestBg
-import com.example.ui.theme.NightMuted
 import com.example.ui.theme.ParchmentCard
 import com.example.ui.theme.ParchmentCardLight
 import com.example.ui.theme.ParchmentInkBright
 import com.example.ui.theme.PurpleStar
 import com.example.ui.theme.TealAccent
-import com.example.ui.theme.WarnBadgeBg
 import com.example.ui.theme.WarnCrimson
 import com.example.ui.theme.WarnRedBright
 import java.time.Instant
-import java.time.LocalDate
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -96,7 +92,7 @@ fun ReportScreen(
     onToggleShowSquadInReport: (Boolean) -> Unit,
     onToggleShowTeamTreasures: (Boolean) -> Unit,
     onToggleObtained: (String, Boolean) -> Unit,
-    onUpdateMatchChests: (String, Int) -> Unit,
+    onUpdateMatchDetails: (sessionId: String, chestsOpened: Int, treasures: List<TreasureFindDto>, matchNumber: Int?, sessionNumber: Int?) -> Unit,
     onDeleteMatch: (String) -> Unit,
     onExportCsv: () -> Unit,
     onExportDataJson: () -> Unit,
@@ -107,15 +103,20 @@ fun ReportScreen(
     val matches = remember(view.matches) {
         view.matches.sortedByDescending { L.parseUtc(it.matchStartUtc) ?: L.parseUtc(it.analyzedAtUtc) ?: Instant.EPOCH }
     }
+    val liveChests = if (state.liveMatch.active) state.liveMatch.chests else 0
+    val liveTreasures = if (state.liveMatch.active) state.liveMatch.treasures.size else 0
     val totalChests = view.countedChests
-    val grandTotal = view.totalChests
+    val grandTotal = view.totalChests + liveChests
     val teamChests = view.teamChests
     val avg = if (matches.isNotEmpty()) totalChests.toDouble() / matches.size else 0.0
     val best = matches.maxOfOrNull { it.chestsOpened } ?: 0
-    val treasures = matches.sumOf { it.treasureFinds.size }
+    val treasures = matches.sumOf { it.treasureFinds.size } + liveTreasures
     val teamTreasures = matches.sumOf { it.teamTreasureFinds.size }
-    val session = matches.filter(OverlayModel::isThisSession).sumOf { it.chestsOpened }
-    val every = if (treasures > 0) (totalChests.toDouble() / treasures).roundToInt() else 0
+    val sessionMatches = matches.filter {
+        OverlayModel.isInSession(it, state.config.sessionNumber, state.config.sessionStartedEpochMs)
+    }
+    val session = sessionMatches.sumOf { it.chestsOpened } + liveChests
+    val every = if (treasures > 0) ((totalChests + liveChests).toDouble() / treasures).roundToInt() else 0
 
     // Seen prize IDs in replays auto-tick collection items
     val seenPrizeIds = remember(matches) {
@@ -540,7 +541,19 @@ fun ReportScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(Pretty.playlist(m.playlist, lang), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+                                val numBadge = buildString {
+                                    if (m.matchNumber != null) append("${L.t(lang, "Partie", "Match", "Partida")} ${m.matchNumber}")
+                                    if (m.sessionNumber != null) {
+                                        if (isNotEmpty()) append(" · ")
+                                        append("${L.t(lang, "Session", "Session", "Sesión")} ${m.sessionNumber}")
+                                    }
+                                }
+                                val title = if (numBadge.isNotEmpty()) {
+                                    "$numBadge · ${Pretty.playlist(m.playlist, lang)}"
+                                } else {
+                                    Pretty.playlist(m.playlist, lang)
+                                }
+                                Text(title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
                                 Text(
                                     "$whenTxt · ${Pretty.placement(m, lang)}",
                                     style = MaterialTheme.typography.bodySmall,
@@ -551,6 +564,12 @@ fun ReportScreen(
                                         m.treasureFinds.joinToString(", ") { (if (it.fromGoldenChest) "★★ " else "★ ") + it.displayName(lang) },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = PurpleStar,
+                                    )
+                                } else {
+                                    Text(
+                                        L.t(lang, "Toucher pour choisir les trésors", "Tap to pick treasures", "Toca para elegir tesoros"),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = CardMuted,
                                     )
                                 }
                             }
@@ -600,8 +619,8 @@ fun ReportScreen(
             match = match,
             state = state,
             onDismiss = { selectedMatch = null },
-            onSaveChests = { count ->
-                onUpdateMatchChests(match.sessionId, count)
+            onSave = { chests, treasuresList, matchNum, sessionNum ->
+                onUpdateMatchDetails(match.sessionId, chests, treasuresList, matchNum, sessionNum)
                 selectedMatch = null
             },
             onDeleteMatch = {
@@ -779,67 +798,3 @@ internal fun PagerControls(
     }
 }
 
-@Composable
-private fun MatchDetailDialog(
-    match: MatchRecordDto,
-    state: MainUiState,
-    onDismiss: () -> Unit,
-    onSaveChests: (Int) -> Unit,
-    onDeleteMatch: () -> Unit,
-) {
-    val lang = state.config.language
-    var chestText by remember(match.sessionId) { mutableStateOf(match.chestsOpened.toString()) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = ParchmentCard,
-        titleContentColor = HeroChestBg,
-        textContentColor = CardInk,
-        title = {
-            Text(Pretty.playlist(match.playlist, lang), style = MaterialTheme.typography.headlineMedium)
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("${L.t(lang, "Fichier", "File", "Archivo")}: ${match.replayFile}", style = MaterialTheme.typography.bodySmall)
-                Text("${L.t(lang, "Place", "Placement", "Puesto")}: ${Pretty.placement(match, lang)}", style = MaterialTheme.typography.bodySmall)
-                match.eliminations?.let {
-                    Text("${L.t(lang, "Éliminations", "Eliminations", "Eliminaciones")}: $it", style = MaterialTheme.typography.bodySmall)
-                }
-                match.map?.let {
-                    Text("${L.t(lang, "Carte", "Map", "Mapa")}: $it", style = MaterialTheme.typography.bodySmall)
-                }
-                match.notes?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = WarnCrimson)
-                }
-                OutlinedTextField(
-                    value = chestText,
-                    onValueChange = { chestText = it.filter { ch -> ch.isDigit() } },
-                    label = { Text(L.t(lang, "Coffres ouverts", "Chests opened", "Cofres abiertos")) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = ParchmentCardLight,
-                        unfocusedContainerColor = ParchmentCardLight,
-                        focusedTextColor = CardInk,
-                        unfocusedTextColor = CardInk,
-                    ),
-                )
-            }
-        },
-        confirmButton = {
-            LogbookPrimaryButton(
-                text = L.t(lang, "Enregistrer", "Save", "Guardar"),
-                onClick = { onSaveChests(chestText.toIntOrNull() ?: match.chestsOpened) },
-            )
-        },
-        dismissButton = {
-            Row {
-                TextButton(onClick = onDeleteMatch) {
-                    Text(L.t(lang, "Supprimer", "Delete", "Eliminar"), color = WarnCrimson)
-                }
-                TextButton(onClick = onDismiss) {
-                    Text(L.t(lang, "Fermer", "Close", "Cerrar"), color = CardInk)
-                }
-            }
-        },
-    )
-}

@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import com.example.domain.AppInfo
 import com.example.domain.L
 import com.example.domain.OverlayView
+import com.example.domain.TreasureFindDto
 import com.example.ui.components.ChestVectorIcon
 import com.example.ui.components.QuickSwitchFabMenu
 import com.example.ui.components.QuickViewMode
@@ -100,11 +101,17 @@ fun ChestCounterAppShell(
     onComputeEstimate: (Int) -> Unit,
     onApplyEstimate: () -> Unit,
     onClearEstimate: () -> Unit,
+    onIncrementLiveChest: (Int) -> Unit,
+    onAddLiveTreasure: (itemName: String, prizeId: String?, fromGoldenChest: Boolean) -> Unit,
+    onRemoveLiveTreasure: (Int) -> Unit,
+    onFinishLiveMatch: () -> Unit,
+    onResetLiveMatch: () -> Unit,
+    onStartNewSession: () -> Unit,
     onToggleShowSquadTotal: (Boolean) -> Unit,
     onToggleShowSquadInReport: (Boolean) -> Unit,
     onToggleShowTeamTreasures: (Boolean) -> Unit,
     onToggleObtained: (String, Boolean) -> Unit,
-    onUpdateMatchChests: (String, Int) -> Unit,
+    onUpdateMatchDetails: (sessionId: String, chestsOpened: Int, treasures: List<TreasureFindDto>, matchNumber: Int?, sessionNumber: Int?) -> Unit,
     onDeleteMatch: (String) -> Unit,
     onOverlayStyleChange: (String) -> Unit,
     onOverlaySizeChange: (Int) -> Unit,
@@ -286,6 +293,12 @@ fun ChestCounterAppShell(
                                 },
                                 onToggleShowTeamTreasures = onToggleShowTeamTreasures,
                                 onToggleObtained = onToggleObtained,
+                                onIncrementLiveChest = onIncrementLiveChest,
+                                onAddLiveTreasure = onAddLiveTreasure,
+                                onRemoveLiveTreasure = onRemoveLiveTreasure,
+                                onFinishLiveMatch = onFinishLiveMatch,
+                                onResetLiveMatch = onResetLiveMatch,
+                                onStartNewSession = onStartNewSession,
                             )
                             QuickViewMode.CHEST_ODDS_CALCULATOR -> ChestOddsCalculatorScreen(
                                 state = state,
@@ -302,6 +315,14 @@ fun ChestCounterAppShell(
                                 state = state,
                                 onOpenReport = { activeTab = AppTab.REPORT },
                                 onEditChests = { showEditDialog = true },
+                                onIncrementLiveChest = onIncrementLiveChest,
+                                onAddLiveTreasure = onAddLiveTreasure,
+                                onRemoveLiveTreasure = onRemoveLiveTreasure,
+                                onFinishLiveMatch = onFinishLiveMatch,
+                                onResetLiveMatch = onResetLiveMatch,
+                                onStartNewSession = onStartNewSession,
+                                onUpdateMatchDetails = onUpdateMatchDetails,
+                                onDeleteMatch = onDeleteMatch,
                                 onPickReplays = onPickReplays,
                                 onPickDemosFolder = onPickDemosFolder,
                                 onImportDataJson = onImportDataJson,
@@ -318,7 +339,7 @@ fun ChestCounterAppShell(
                                 onToggleShowSquadInReport = onToggleShowSquadInReport,
                                 onToggleShowTeamTreasures = onToggleShowTeamTreasures,
                                 onToggleObtained = onToggleObtained,
-                                onUpdateMatchChests = onUpdateMatchChests,
+                                onUpdateMatchDetails = onUpdateMatchDetails,
                                 onDeleteMatch = onDeleteMatch,
                                 onExportCsv = onExportCsv,
                                 onExportDataJson = onExportDataJson,

@@ -8,17 +8,15 @@ import android.net.Uri
 import android.text.format.DateFormat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.room.Room
 import com.example.data.FortniteLauncher
 import com.example.data.FortniteStatus
-import com.example.data.local.AppDatabase
-import com.example.data.local.ChestCounterRepository
-import com.example.data.local.SettingsRepository
+import com.example.data.local.AppContainer
 import com.example.domain.ActivityLevel
 import com.example.domain.ActivityLogEntry
 import com.example.domain.AppConfig
 import com.example.domain.ChestEstimate
 import com.example.domain.L
+import com.example.domain.LiveMatchState
 import com.example.domain.MatchRecordDto
 import com.example.domain.Notice
 import com.example.domain.OverlayPreviewState
@@ -29,6 +27,7 @@ import com.example.domain.ReportExporter
 import com.example.domain.ScanProgress
 import com.example.domain.TrackerView
 import com.example.domain.TreasureCatalog
+import com.example.domain.TreasureFindDto
 import com.example.overlay.FloatingOverlayService
 import com.example.overlay.OverlayPermissionHelper
 import kotlinx.coroutines.delay
@@ -46,6 +45,7 @@ enum class AppTab { HOME, REPORT, OVERLAY, SETTINGS, HELP }
 
 data class MainUiState(
     val config: AppConfig = AppConfig(),
+    val liveMatch: LiveMatchState = LiveMatchState(),
     val allMatches: List<MatchRecordDto> = emptyList(),
     val view: TrackerView = TrackerView(emptyList(), 0, emptyList(), emptyList()),
     val profiles: List<Profile> = emptyList(),
@@ -67,14 +67,8 @@ data class MainUiState(
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
-    private val db = Room.databaseBuilder(
-        application,
-        AppDatabase::class.java,
-        "chest_counter.db"
-    ).build()
-
-    private val settings = SettingsRepository(application)
-    private val repo = ChestCounterRepository(application, db, settings)
+    private val repo = AppContainer.repository(application)
+    private val settings = repo.settings
 
     private val scanProgressFlow = MutableStateFlow<ScanProgress?>(null)
     private val overlayPreviewStateFlow = MutableStateFlow(OverlayPreviewState.IDLE)
@@ -98,6 +92,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         TreasureCatalog.init(application)
         catalogRevFlow.value = TreasureCatalog.data.revision
         viewModelScope.launch {
+            settings.ensureSessionInitialized()
             errorLogFlow.value = repo.readErrorLog()
             val cfg = settings.configFlow.first()
             if (cfg.autoRefreshCatalog) {
@@ -147,14 +142,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     val uiState: StateFlow<MainUiState> = combine(
-        settings.configFlow,
+        combine(settings.configFlow, settings.liveMatchFlow) { cfg, live -> cfg to live },
         repo.matchesFlow,
         repo.manualEntriesFlow,
         repo.obtainedPrizesFlow,
         repo.activityLogFlow,
         auxFlow,
     ) { args ->
-        val config = args[0] as AppConfig
+        @Suppress("UNCHECKED_CAST")
+        val cfgLive = args[0] as Pair<AppConfig, LiveMatchState>
+        val config = cfgLive.first
+        val liveMatch = cfgLive.second
         @Suppress("UNCHECKED_CAST")
         val matches = args[1] as List<MatchRecordDto>
         @Suppress("UNCHECKED_CAST")
@@ -174,6 +172,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         MainUiState(
             config = config,
+            liveMatch = liveMatch,
             allMatches = matches,
             view = view,
             profiles = profiles,
@@ -191,7 +190,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             isSystem24Hour = sys24,
             snackbarMessage = aux.snackbar,
             canDrawOverlays = aux.canDrawOverlays,
-            floatingOverlayActive = aux.floatingActive,
+            floatingOverlayActive = FloatingOverlayService.isRunning || aux.floatingActive,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -211,23 +210,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startOrUpdateFloatingOverlay(overlayView: OverlayView) {
         val ctx = getApplication<Application>()
-        val cfg = uiState.value.config
         if (!OverlayPermissionHelper.canDrawOverlays(ctx)) {
             refreshOverlayPermissionState()
             return
         }
-        FloatingOverlayService.startOrUpdate(
-            context = ctx,
-            total = overlayView.total,
-            last = overlayView.last ?: "—",
-            session = overlayView.session,
-            treasures = overlayView.treasures,
-            squad = overlayView.squad,
-            style = cfg.overlayStyle,
-            sizePct = cfg.overlaySize,
-            opacityPct = cfg.overlayOpacity,
-            live = overlayView.currentLive,
-        )
+        FloatingOverlayService.startOrUpdate(ctx)
         overlayPermFlow.value = true to true
     }
 
@@ -409,8 +396,84 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repo.removeManual(profileKey, id) }
     }
 
+    fun incrementLiveChest(delta: Int) {
+        val lang = uiState.value.config.language
+        viewModelScope.launch { repo.incrementLiveChest(delta, lang) }
+    }
+
+    fun addLiveTreasure(itemName: String, prizeId: String?, fromGoldenChest: Boolean) {
+        val state = uiState.value
+        val profileKey = state.currentProfile?.key ?: ""
+        viewModelScope.launch {
+            repo.addLiveTreasure(itemName, prizeId, fromGoldenChest, profileKey, state.config.language)
+        }
+    }
+
+    fun removeLiveTreasure(index: Int) {
+        viewModelScope.launch { repo.removeLiveTreasure(index) }
+    }
+
+    fun finishLiveMatch() {
+        val state = uiState.value
+        val profileKey = state.currentProfile?.key ?: ""
+        val playerName = state.currentProfile?.name
+        val lang = state.config.language
+        viewModelScope.launch {
+            val saved = repo.finishLiveMatch(profileKey, playerName, lang)
+            if (saved != null) {
+                snackbarFlow.value = L.t(
+                    lang,
+                    "Partie ${saved.matchNumber ?: ""} enregistrée (${L.n(lang, saved.chestsOpened)} coffres)",
+                    "Saved Match ${saved.matchNumber ?: ""} (${L.n(lang, saved.chestsOpened)} chests)",
+                    "Partida ${saved.matchNumber ?: ""} guardada (${L.n(lang, saved.chestsOpened)} cofres)",
+                )
+            }
+        }
+    }
+
+    fun resetLiveMatch() {
+        val lang = uiState.value.config.language
+        viewModelScope.launch { repo.resetLiveMatch(lang) }
+    }
+
+    fun startNewSession() {
+        val lang = uiState.value.config.language
+        viewModelScope.launch {
+            repo.startNewSession(lang)
+            val nextSession = uiState.value.config.sessionNumber + 1
+            snackbarFlow.value = L.t(
+                lang,
+                "Session $nextSession démarrée (Partie 1)",
+                "Session $nextSession started (Match 1)",
+                "Sesión $nextSession iniciada (Partida 1)",
+            )
+        }
+    }
+
     fun updateMatchChests(sessionId: String, chestsOpened: Int) {
         viewModelScope.launch { repo.updateMatchChests(sessionId, chestsOpened) }
+    }
+
+    fun updateMatchDetails(
+        sessionId: String,
+        chestsOpened: Int,
+        treasureFinds: List<TreasureFindDto>,
+        matchNumber: Int? = null,
+        sessionNumber: Int? = null,
+    ) {
+        val state = uiState.value
+        val profileKey = state.currentProfile?.key ?: ""
+        viewModelScope.launch {
+            repo.updateMatchDetails(
+                sessionId = sessionId,
+                chestsOpened = chestsOpened,
+                treasureFinds = treasureFinds,
+                matchNumber = matchNumber,
+                sessionNumber = sessionNumber,
+                profileKey = profileKey,
+                lang = state.config.language,
+            )
+        }
     }
 
     fun deleteMatch(sessionId: String) {

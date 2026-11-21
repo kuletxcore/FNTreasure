@@ -10,7 +10,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.aistudio.chestcounter.fnkpxq"
+        applicationId = "com.kuletx.forttreasure"
         minSdk = 26
         targetSdk = 36
         versionCode = 151

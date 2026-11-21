@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,15 +19,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -51,17 +50,22 @@ import androidx.compose.ui.unit.dp
 import com.example.domain.ActivityLevel
 import com.example.domain.AppInfo
 import com.example.domain.L
+import com.example.domain.MatchRecordDto
 import com.example.domain.OverlayModel
 import com.example.domain.Pretty
+import com.example.domain.TreasureFindDto
 import com.example.ui.MainUiState
 import com.example.ui.components.HeroChestCard
+import com.example.ui.components.LiveMatchSessionCard
 import com.example.ui.components.LogbookPrimaryButton
 import com.example.ui.components.LogbookSecondaryButton
+import com.example.ui.components.MatchDetailDialog
 import com.example.ui.components.NoticeCard
 import com.example.ui.components.ParchmentCard
 import com.example.ui.components.SectionHeading
 import com.example.ui.components.StatTile
 import com.example.ui.theme.AccentGold
+import com.example.ui.theme.AccentGoldText
 import com.example.ui.theme.CardInk
 import com.example.ui.theme.CardLine
 import com.example.ui.theme.CardMuted
@@ -70,8 +74,6 @@ import com.example.ui.theme.LiveGreen
 import com.example.ui.theme.ParchmentCard
 import com.example.ui.theme.ParchmentCardLight
 import com.example.ui.theme.PurpleStar
-import com.example.ui.theme.TealAccent
-import com.example.ui.theme.WarnCrimson
 import java.time.Instant
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
@@ -80,6 +82,14 @@ fun HomeScreen(
     state: MainUiState,
     onOpenReport: () -> Unit,
     onEditChests: () -> Unit,
+    onIncrementLiveChest: (Int) -> Unit,
+    onAddLiveTreasure: (itemName: String, prizeId: String?, fromGoldenChest: Boolean) -> Unit,
+    onRemoveLiveTreasure: (Int) -> Unit,
+    onFinishLiveMatch: () -> Unit,
+    onResetLiveMatch: () -> Unit,
+    onStartNewSession: () -> Unit,
+    onUpdateMatchDetails: (sessionId: String, chestsOpened: Int, treasures: List<TreasureFindDto>, matchNumber: Int?, sessionNumber: Int?) -> Unit,
+    onDeleteMatch: (String) -> Unit,
     onPickReplays: () -> Unit,
     onPickDemosFolder: () -> Unit,
     onImportDataJson: () -> Unit,
@@ -92,13 +102,20 @@ fun HomeScreen(
 ) {
     val lang = state.config.language
     val view = state.view
-    val matches = view.matches
-    val sessionMatches = matches.filter(OverlayModel::isThisSession)
-    val sessionChests = sessionMatches.sumOf { it.chestsOpened }
-    val lastMatch = matches.maxByOrNull { L.parseUtc(it.matchStartUtc) ?: L.parseUtc(it.analyzedAtUtc) ?: Instant.EPOCH }
-    val treasures = matches.sumOf { it.treasureFinds.size }
+    val matches = remember(view.matches) {
+        view.matches.sortedByDescending { L.parseUtc(it.matchStartUtc) ?: L.parseUtc(it.analyzedAtUtc) ?: Instant.EPOCH }
+    }
+    val liveChests = if (state.liveMatch.active) state.liveMatch.chests else 0
+    val liveTreasures = if (state.liveMatch.active) state.liveMatch.treasures.size else 0
+    val sessionMatches = matches.filter {
+        OverlayModel.isInSession(it, state.config.sessionNumber, state.config.sessionStartedEpochMs)
+    }
+    val sessionChests = sessionMatches.sumOf { it.chestsOpened } + liveChests
+    val lastMatch = matches.firstOrNull()
+    val treasures = matches.sumOf { it.treasureFinds.size } + liveTreasures
     val avg = if (matches.isNotEmpty()) view.countedChests.toDouble() / matches.size else 0.0
     var showLootCalcSheet by remember { mutableStateOf(false) }
+    var selectedMatch by remember { mutableStateOf<MatchRecordDto?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // Notices from content.json
@@ -271,7 +288,7 @@ fun HomeScreen(
         } else null
 
         HeroChestCard(
-            totalChests = L.n(lang, view.totalChests),
+            totalChests = L.n(lang, view.totalChests + liveChests),
             title = L.t(lang, "Coffres au total", "Chests in total", "Cofres en total"),
             subtitle = L.t(lang, "ouverts ou détruits par toi", "opened or destroyed by you", "abiertos o destruidos por ti"),
             manualLine = manualLine,
@@ -279,18 +296,30 @@ fun HomeScreen(
             editContentDescription = L.t(lang, "Modifier mon nombre de coffres", "Edit my number of chests", "Modificar mi número de cofres"),
         )
 
+        // Live Match & Session Card (separate Match #, Session #, chest counts & Treasure Picker)
+        LiveMatchSessionCard(
+            state = state,
+            onIncrementChest = onIncrementLiveChest,
+            onAddTreasure = onAddLiveTreasure,
+            onRemoveTreasure = onRemoveLiveTreasure,
+            onFinishMatch = onFinishLiveMatch,
+            onResetLiveMatch = onResetLiveMatch,
+            onStartNewSession = onStartNewSession,
+        )
+
         // Secondary Stat Tiles Grid
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             StatTile(
                 value = L.n(lang, sessionChests),
-                label = "${L.t(lang, "Session", "Session", "Sesión")} · ${L.count(lang, sessionMatches.size, "partie", "parties", "match", "matches", "partida", "partidas")}",
+                label = "${L.t(lang, "Session", "Session", "Sesión")} ${state.config.sessionNumber} · ${L.count(lang, sessionMatches.size, "partie", "parties", "match", "matches", "partida", "partidas")}",
                 modifier = Modifier.weight(1f),
             )
             val lastSub = lastMatch?.let { m ->
                 val whenTxt = (L.parseUtc(m.matchStartUtc) ?: L.parseUtc(m.analyzedAtUtc))?.let {
                     L.dateTimeShort(it, lang, state.config.timeZone, state.config.clockFormat, state.isSystem24Hour)
                 }
-                listOfNotNull(whenTxt, Pretty.playlist(m.playlist, lang)).joinToString(" · ")
+                val matchTag = m.matchNumber?.let { "${L.t(lang, "Partie", "Match", "Partida")} $it" }
+                listOfNotNull(matchTag, whenTxt, Pretty.playlist(m.playlist, lang)).joinToString(" · ")
             }
             StatTile(
                 value = lastMatch?.let { L.n(lang, it.chestsOpened) } ?: "—",
@@ -369,6 +398,66 @@ fun HomeScreen(
             )
         }
 
+        // Recent Matches Log (Tap any match to pick treasures or adjust chests)
+        if (matches.isNotEmpty()) {
+            SectionHeading(L.t(lang, "Journal des parties", "Match log", "Registro de partidas"))
+            ParchmentCard {
+                matches.take(8).forEachIndexed { idx, m ->
+                    if (idx > 0) HorizontalDivider(color = CardLine, modifier = Modifier.padding(vertical = 8.dp))
+                    val whenTxt = (L.parseUtc(m.matchStartUtc) ?: L.parseUtc(m.analyzedAtUtc))?.let {
+                        L.dateTimeShort(it, lang, state.config.timeZone, state.config.clockFormat, state.isSystem24Hour)
+                    } ?: ""
+                    val numBadge = buildString {
+                        if (m.matchNumber != null) append("${L.t(lang, "Partie", "Match", "Partida")} ${m.matchNumber}")
+                        if (m.sessionNumber != null) {
+                            if (isNotEmpty()) append(" · ")
+                            append("${L.t(lang, "Session", "Session", "Sesión")} ${m.sessionNumber}")
+                        }
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { selectedMatch = m }
+                            .padding(vertical = 4.dp)
+                            .testTag("home_match_row_${idx}"),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (numBadge.isNotEmpty()) "$numBadge · ${Pretty.playlist(m.playlist, lang)}" else Pretty.playlist(m.playlist, lang),
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = CardInk,
+                            )
+                            Text(
+                                text = whenTxt,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = CardMuted,
+                            )
+                            if (m.treasureFinds.isNotEmpty()) {
+                                Text(
+                                    text = m.treasureFinds.joinToString(", ") { (if (it.fromGoldenChest) "★★ " else "★ ") + it.displayName(lang) },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = PurpleStar,
+                                )
+                            } else {
+                                Text(
+                                    text = L.t(lang, "Toucher pour choisir les trésors", "Tap to pick treasures", "Toca para elegir tesoros"),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AccentGoldText,
+                                )
+                            }
+                        }
+                        Text(
+                            text = L.n(lang, m.chestsOpened),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = HeroChestBg,
+                        )
+                    }
+                }
+            }
+        }
+
         // Activity Log Card
         SectionHeading(L.t(lang, "Activité", "Activity", "Actividad"))
         ParchmentCard {
@@ -376,9 +465,9 @@ fun HomeScreen(
                 Text(
                     text = L.t(
                         lang,
-                        "Rien pour l'instant. Importe des fichiers .replay ou un historique data.json.",
-                        "Nothing yet. Import .replay files or a ChestCounter data.json backup.",
-                        "Nada por ahora. Importa archivos .replay o una copia data.json.",
+                        "Rien pour l'instant. Utilise le compteur en direct, l'overlay ou importe des fichiers .replay.",
+                        "Nothing yet. Use the live match tracker, floating overlay, or import .replay files.",
+                        "Nada por ahora. Usa el contador en vivo, el overlay o importa archivos .replay.",
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = CardMuted,
@@ -418,6 +507,22 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    selectedMatch?.let { match ->
+        MatchDetailDialog(
+            match = match,
+            state = state,
+            onDismiss = { selectedMatch = null },
+            onSave = { chests, treasuresList, matchNum, sessionNum ->
+                onUpdateMatchDetails(match.sessionId, chests, treasuresList, matchNum, sessionNum)
+                selectedMatch = null
+            },
+            onDeleteMatch = {
+                onDeleteMatch(match.sessionId)
+                selectedMatch = null
+            },
+        )
     }
 
     if (showLootCalcSheet) {

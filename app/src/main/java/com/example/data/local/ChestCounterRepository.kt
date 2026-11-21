@@ -9,21 +9,28 @@ import com.example.data.ReplayFileParser
 import com.example.data.ReplayParseOutcome
 import com.example.domain.ActivityLevel
 import com.example.domain.ActivityLogEntry
+import com.example.domain.ChestKinds
 import com.example.domain.L
+import com.example.domain.LiveMatchState
 import com.example.domain.ManualEntryDto
 import com.example.domain.MatchRecordDto
+import com.example.domain.OverlayModel
 import com.example.domain.Profiles
 import com.example.domain.ScanProgress
 import com.example.domain.TrackerDataJson
 import com.example.domain.TreasureCatalog
+import com.example.domain.TreasureFindDto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.time.Duration
 import java.time.Instant
+import java.util.UUID
 
 class ChestCounterRepository(
     private val context: Context,
@@ -198,6 +205,238 @@ class ChestCounterRepository(
         val updated = dto.copy(chestsOpened = maxOf(0, chestsOpened))
         db.matchDao().upsert(
             existing.copy(payloadJson = json.encodeToString(updated))
+        )
+    }
+
+    suspend fun updateMatchDetails(
+        sessionId: String,
+        chestsOpened: Int,
+        treasureFinds: List<TreasureFindDto>,
+        matchNumber: Int? = null,
+        sessionNumber: Int? = null,
+        profileKey: String = "",
+        lang: String = "en",
+    ) {
+        val existing = db.matchDao().getAll().firstOrNull { it.sessionId == sessionId } ?: return
+        val dto = json.decodeFromString<MatchRecordDto>(existing.payloadJson)
+        val updated = dto.copy(
+            chestsOpened = maxOf(0, chestsOpened),
+            treasureFinds = treasureFinds,
+            matchNumber = matchNumber ?: dto.matchNumber,
+            sessionNumber = sessionNumber ?: dto.sessionNumber,
+        )
+        db.matchDao().upsert(
+            existing.copy(payloadJson = json.encodeToString(updated))
+        )
+        val effectiveProfile = existing.profileKey.ifBlank { profileKey }
+        treasureFinds.forEach { find ->
+            val pid = find.prizeId
+            if (!pid.isNullOrBlank()) {
+                val prize = TreasureCatalog.find(pid)
+                if (prize != null) {
+                    setObtained(effectiveProfile, prize.id, true)
+                }
+            }
+        }
+        val mLabel = updated.matchNumber?.let { "Match #$it" } ?: updated.replayFile
+        log(
+            L.t(
+                lang,
+                "Modifié : $mLabel · ${updated.chestsOpened} coffres · ★ ${treasureFinds.size}",
+                "Updated: $mLabel · ${updated.chestsOpened} chests · ★ ${treasureFinds.size}",
+                "Actualizado: $mLabel · ${updated.chestsOpened} cofres · ★ ${treasureFinds.size}",
+            ),
+            ActivityLevel.INFO,
+        )
+    }
+
+    suspend fun incrementLiveChest(delta: Int, lang: String) {
+        settings.ensureSessionInitialized()
+        settings.updateLiveMatch { cur ->
+            val nowIso = cur.startedUtc ?: Instant.now().toString()
+            val nextChests = (cur.chests + delta).coerceAtLeast(0)
+            cur.copy(
+                active = true,
+                chests = nextChests,
+                startedUtc = nowIso,
+            )
+        }
+    }
+
+    suspend fun addLiveTreasure(
+        itemName: String,
+        prizeId: String?,
+        fromGoldenChest: Boolean,
+        profileKey: String,
+        lang: String,
+    ) {
+        settings.ensureSessionInitialized()
+        var started: Instant? = null
+        settings.updateLiveMatch { cur ->
+            val startStr = cur.startedUtc ?: Instant.now().toString()
+            started = L.parseUtc(startStr)
+            val elapsedSec = started?.let {
+                Duration.between(it, Instant.now()).seconds.coerceAtLeast(0L).toFloat()
+            }
+            val find = TreasureFindDto(
+                item = itemName,
+                rawItem = prizeId ?: itemName,
+                prizeId = prizeId,
+                fromGoldenChest = fromGoldenChest,
+                timeExact = true,
+                obtainedAtSeconds = elapsedSec,
+                sourceKind = ChestKinds.NORMAL,
+                sourceIsChest = true,
+                sourceCertain = true,
+            )
+            cur.copy(
+                active = true,
+                treasures = cur.treasures + find,
+                startedUtc = startStr,
+            )
+        }
+        if (!prizeId.isNullOrBlank()) {
+            TreasureCatalog.find(prizeId)?.let { prize ->
+                setObtained(profileKey, prize.id, true)
+            }
+        }
+        val display = if (!prizeId.isNullOrBlank()) {
+            com.example.domain.TreasureNames.friendly(prizeId, lang)
+        } else {
+            L.name(itemName, lang)
+        }
+        log("★ $display", ActivityLevel.TREASURE)
+    }
+
+    suspend fun removeLiveTreasure(index: Int) {
+        settings.updateLiveMatch { cur ->
+            if (index !in cur.treasures.indices) cur
+            else cur.copy(treasures = cur.treasures.toMutableList().apply { removeAt(index) })
+        }
+    }
+
+    suspend fun finishLiveMatch(
+        profileKey: String,
+        playerName: String?,
+        lang: String,
+        playlist: String = "experience_br",
+    ): MatchRecordDto? {
+        settings.ensureSessionInitialized()
+        val cfg = settings.configFlow.first()
+        val live = settings.liveMatchFlow.first()
+        if (!live.active && live.chests == 0 && live.treasures.isEmpty()) {
+            return null
+        }
+
+        val allMatches = db.matchDao().getAll().mapNotNull {
+            runCatching { json.decodeFromString<MatchRecordDto>(it.payloadJson) }.getOrNull()
+        }
+        val counted = Profiles.counted(allMatches)
+        val filteredForProfile = if (profileKey.isNotBlank()) {
+            counted.filter { Profiles.key(it) == profileKey }
+        } else {
+            counted
+        }
+        val sessionMatches = filteredForProfile.filter {
+            OverlayModel.isInSession(it, cfg.sessionNumber, cfg.sessionStartedEpochMs)
+        }
+        val matchNumber = OverlayModel.nextMatchNumber(sessionMatches)
+
+        val now = Instant.now()
+        val startInst = L.parseUtc(live.startedUtc) ?: now
+        val durSec = Duration.between(startInst, now).seconds.coerceAtLeast(1L).toInt()
+        val sessionId = "live_${now.toEpochMilli()}_${UUID.randomUUID().toString().take(6)}"
+
+        val effectivePlayer = playerName?.takeIf { it.isNotBlank() } ?: profileKey.takeIf { it.isNotBlank() }
+        val match = MatchRecordDto(
+            sessionId = sessionId,
+            replayFile = "Match #$matchNumber (Session #${cfg.sessionNumber})",
+            analyzedAtUtc = now.toString(),
+            matchStartUtc = startInst.toString(),
+            durationSeconds = durSec,
+            playlist = playlist,
+            playerName = effectivePlayer,
+            epicId = profileKey.takeIf { it.isNotBlank() && it != effectivePlayer },
+            chestsOpened = live.chests,
+            chests = List(live.chests) { idx ->
+                com.example.domain.ChestRecordDto(
+                    timeSeconds = (idx + 1).toFloat(),
+                    kind = ChestKinds.NORMAL,
+                )
+            },
+            treasureFinds = live.treasures,
+            sessionNumber = cfg.sessionNumber,
+            matchNumber = matchNumber,
+            notes = L.t(
+                lang,
+                "Partie $matchNumber · Session ${cfg.sessionNumber} (compteur en direct)",
+                "Match $matchNumber · Session ${cfg.sessionNumber} (live counter)",
+                "Partida $matchNumber · Sesión ${cfg.sessionNumber} (contador en directo)",
+            ),
+        )
+
+        db.matchDao().upsert(
+            MatchEntity(
+                sessionId = sessionId,
+                profileKey = Profiles.key(match),
+                matchStartEpochMs = startInst.toEpochMilli(),
+                payloadJson = json.encodeToString(match),
+            )
+        )
+        live.treasures.forEach { find ->
+            val pid = find.prizeId
+            if (!pid.isNullOrBlank()) {
+                TreasureCatalog.find(pid)?.let { prize ->
+                    setObtained(Profiles.key(match), prize.id, true)
+                }
+            }
+        }
+        settings.clearLiveMatch()
+
+        val tSummary = if (live.treasures.isNotEmpty()) {
+            " · ★ " + live.treasures.joinToString(", ") { it.displayName(lang) }
+        } else {
+            ""
+        }
+        log(
+            L.t(
+                lang,
+                "Partie $matchNumber (Session ${cfg.sessionNumber}) : ${L.count(lang, live.chests, "coffre", "chest", "cofre")}$tSummary",
+                "Match $matchNumber (Session ${cfg.sessionNumber}): ${L.count(lang, live.chests, "coffre", "chest", "cofre")}$tSummary",
+                "Partida $matchNumber (Sesión ${cfg.sessionNumber}): ${L.count(lang, live.chests, "coffre", "chest", "cofre")}$tSummary",
+            ),
+            ActivityLevel.OK,
+        )
+        return match
+    }
+
+    suspend fun resetLiveMatch(lang: String) {
+        settings.clearLiveMatch()
+        log(
+            L.t(
+                lang,
+                "Compteur de la partie en cours réinitialisé.",
+                "Current live match reset.",
+                "Contador de partida actual reiniciado.",
+            ),
+            ActivityLevel.INFO,
+        )
+    }
+
+    suspend fun startNewSession(lang: String, clearLive: Boolean = true) {
+        if (clearLive) {
+            settings.clearLiveMatch()
+        }
+        settings.startNewSession()
+        val cfg = settings.configFlow.first()
+        log(
+            L.t(
+                lang,
+                "Nouvelle session #${cfg.sessionNumber} démarrée (Partie 1).",
+                "New Session #${cfg.sessionNumber} started (Match 1).",
+                "Nueva sesión #${cfg.sessionNumber} iniciada (Partida 1).",
+            ),
+            ActivityLevel.INFO,
         )
     }
 

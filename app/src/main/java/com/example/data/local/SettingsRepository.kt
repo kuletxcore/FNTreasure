@@ -4,13 +4,20 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.domain.AppConfig
 import com.example.domain.L
+import com.example.domain.LiveMatchState
+import com.example.domain.TreasureFindDto
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import java.time.Instant
 
 private val Context.dataStore by preferencesDataStore(name = "chest_counter_settings")
 
@@ -30,7 +37,15 @@ class SettingsRepository(private val context: Context) {
         val SHOW_SQUAD_TOTAL = booleanPreferencesKey("show_squad_total")
         val SHOW_SQUAD_REPORT = booleanPreferencesKey("show_squad_in_report")
         val SHOW_TEAM_TREASURES_REPORT = booleanPreferencesKey("show_team_treasures_in_report")
+        val SESSION_NUMBER = intPreferencesKey("session_number")
+        val SESSION_STARTED_MS = longPreferencesKey("session_started_ms")
+        val LIVE_ACTIVE = booleanPreferencesKey("live_match_active")
+        val LIVE_CHESTS = intPreferencesKey("live_match_chests")
+        val LIVE_TREASURES_JSON = stringPreferencesKey("live_match_treasures_json")
+        val LIVE_STARTED_UTC = stringPreferencesKey("live_match_started_utc")
     }
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     val configFlow: Flow<AppConfig> = context.dataStore.data.map { prefs ->
         AppConfig(
@@ -48,6 +63,23 @@ class SettingsRepository(private val context: Context) {
             showSquadTotal = prefs[Keys.SHOW_SQUAD_TOTAL] ?: false,
             showSquadInReport = prefs[Keys.SHOW_SQUAD_REPORT] ?: false,
             showTeamTreasuresInReport = prefs[Keys.SHOW_TEAM_TREASURES_REPORT] ?: false,
+            sessionNumber = (prefs[Keys.SESSION_NUMBER] ?: 1).coerceAtLeast(1),
+            sessionStartedEpochMs = prefs[Keys.SESSION_STARTED_MS] ?: 0L,
+        )
+    }
+
+    val liveMatchFlow: Flow<LiveMatchState> = context.dataStore.data.map { prefs ->
+        val raw = prefs[Keys.LIVE_TREASURES_JSON]
+        val treasures = if (raw.isNullOrBlank()) {
+            emptyList()
+        } else {
+            runCatching { json.decodeFromString<List<TreasureFindDto>>(raw) }.getOrDefault(emptyList())
+        }
+        LiveMatchState(
+            active = prefs[Keys.LIVE_ACTIVE] ?: false,
+            chests = (prefs[Keys.LIVE_CHESTS] ?: 0).coerceAtLeast(0),
+            treasures = treasures,
+            startedUtc = prefs[Keys.LIVE_STARTED_UTC],
         )
     }
 
@@ -112,6 +144,57 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setShowTeamTreasuresInReport(on: Boolean) {
         context.dataStore.edit { it[Keys.SHOW_TEAM_TREASURES_REPORT] = on }
+    }
+
+    suspend fun updateLiveMatch(transform: (LiveMatchState) -> LiveMatchState) {
+        context.dataStore.edit { prefs ->
+            val raw = prefs[Keys.LIVE_TREASURES_JSON]
+            val currentTreasures = if (raw.isNullOrBlank()) emptyList()
+            else runCatching { json.decodeFromString<List<TreasureFindDto>>(raw) }.getOrDefault(emptyList())
+            val current = LiveMatchState(
+                active = prefs[Keys.LIVE_ACTIVE] ?: false,
+                chests = (prefs[Keys.LIVE_CHESTS] ?: 0).coerceAtLeast(0),
+                treasures = currentTreasures,
+                startedUtc = prefs[Keys.LIVE_STARTED_UTC],
+            )
+            val next = transform(current)
+            prefs[Keys.LIVE_ACTIVE] = next.active
+            prefs[Keys.LIVE_CHESTS] = next.chests.coerceAtLeast(0)
+            prefs[Keys.LIVE_TREASURES_JSON] = json.encodeToString(next.treasures)
+            if (next.startedUtc != null) prefs[Keys.LIVE_STARTED_UTC] = next.startedUtc
+            else prefs.remove(Keys.LIVE_STARTED_UTC)
+        }
+    }
+
+    suspend fun clearLiveMatch() {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.LIVE_ACTIVE] = false
+            prefs[Keys.LIVE_CHESTS] = 0
+            prefs.remove(Keys.LIVE_TREASURES_JSON)
+            prefs.remove(Keys.LIVE_STARTED_UTC)
+        }
+    }
+
+    suspend fun startNewSession() {
+        context.dataStore.edit { prefs ->
+            val current = (prefs[Keys.SESSION_NUMBER] ?: 1).coerceAtLeast(1)
+            prefs[Keys.SESSION_NUMBER] = current + 1
+            prefs[Keys.SESSION_STARTED_MS] = System.currentTimeMillis()
+        }
+    }
+
+    suspend fun ensureSessionInitialized() {
+        val current = configFlow.first()
+        if (current.sessionStartedEpochMs == 0L) {
+            context.dataStore.edit { prefs ->
+                if ((prefs[Keys.SESSION_STARTED_MS] ?: 0L) == 0L) {
+                    prefs[Keys.SESSION_STARTED_MS] = System.currentTimeMillis()
+                }
+                if ((prefs[Keys.SESSION_NUMBER] ?: 0) < 1) {
+                    prefs[Keys.SESSION_NUMBER] = 1
+                }
+            }
+        }
     }
 
     suspend fun resetAll() {

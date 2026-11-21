@@ -106,6 +106,8 @@ data class MatchRecordDto(
     @SerialName("UnrecordedVehicleLoot") val unrecordedVehicleLoot: Int = 0,
     // Android-specific optional metadata preserved cleanly without breaking desktop schema
     @SerialName("Notes") val notes: String? = null,
+    @SerialName("SessionNumber") val sessionNumber: Int? = null,
+    @SerialName("MatchNumber") val matchNumber: Int? = null,
 ) {
     val vehicleChestsMissing: Boolean get() = unrecordedVehicleLoot >= 3
 }
@@ -158,6 +160,13 @@ data class ScanProgress(
 
 enum class OverlayPreviewState { IDLE, IN_PROGRESS, LIVE }
 
+data class LiveMatchState(
+    val active: Boolean = false,
+    val chests: Int = 0,
+    val treasures: List<TreasureFindDto> = emptyList(),
+    val startedUtc: String? = null,
+)
+
 data class AppConfig(
     val language: String = "en",
     val selectedProfile: String? = null,
@@ -173,14 +182,18 @@ data class AppConfig(
     val showSquadTotal: Boolean = false,
     val showSquadInReport: Boolean = false,
     val showTeamTreasuresInReport: Boolean = false,
+    val sessionNumber: Int = 1,
+    val sessionStartedEpochMs: Long = 0L,
 )
 
 object AppInfo {
     const val VERSION_NAME = "1.5.1"
-    const val REPO = "LED-N/Fortnite-ChestCounter"
+    const val REPO = "kuletxcore/Fortnite-ChestCounter"
+    const val UPSTREAM_REPO = "LED-N/Fortnite-ChestCounter"
     const val REPO_URL = "https://github.com/$REPO"
     const val ISSUES_URL = "$REPO_URL/issues"
     const val CONTENT_URL = "https://raw.githubusercontent.com/$REPO/main/content/content.json"
+    const val UPSTREAM_CONTENT_URL = "https://raw.githubusercontent.com/$UPSTREAM_REPO/main/content/content.json"
     const val FORTNITE_PACKAGE = "com.epicgames.fortnite"
     const val EXPERIENCE_BR_URL = "https://play.fn.gg/island/experience_br"
 }

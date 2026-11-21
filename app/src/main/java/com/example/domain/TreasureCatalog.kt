@@ -180,32 +180,36 @@ object TreasureCatalog {
     }
 
     fun refreshBlocking(filesDir: File): Boolean {
-        return try {
-            val client = OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
-                .build()
-            val req = Request.Builder()
-                .url(AppInfo.CONTENT_URL)
-                .header("User-Agent", "ChestCounter/${AppInfo.VERSION_NAME} (+${AppInfo.REPO_URL})")
-                .build()
-            client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return false
-                val body = resp.body.string()
-                if (body.length > 512 * 1024) return false
-                val fresh = parse(body) ?: return false
-                val current = loaded
-                if (current != null && fresh.revision <= current.revision) return false
-                val target = File(filesDir, "content.json")
-                val tmp = File(filesDir, "content.json.tmp")
-                tmp.writeText(body)
-                tmp.renameTo(target)
-                loaded = fresh
-                true
+        val client = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .build()
+
+        var updatedAny = false
+        for (url in listOf(AppInfo.CONTENT_URL, AppInfo.UPSTREAM_CONTENT_URL)) {
+            try {
+                val req = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "ChestCounter/${AppInfo.VERSION_NAME} (+${AppInfo.REPO_URL})")
+                    .build()
+                client.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) return@use
+                    val body = resp.body.string()
+                    if (body.length > 512 * 1024) return@use
+                    val fresh = parse(body) ?: return@use
+                    val current = loaded
+                    if (current != null && fresh.revision <= current.revision) return@use
+                    val target = File(filesDir, "content.json")
+                    val tmp = File(filesDir, "content.json.tmp")
+                    tmp.writeText(body)
+                    tmp.renameTo(target)
+                    loaded = fresh
+                    updatedAny = true
+                }
+            } catch (_: Exception) {
             }
-        } catch (_: Exception) {
-            false
         }
+        return updatedAny
     }
 
     fun parse(jsonText: String): CatalogData? {
