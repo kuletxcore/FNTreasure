@@ -13,8 +13,8 @@ android {
         applicationId = "com.kuletx.forttreasure"
         minSdk = 26
         targetSdk = 36
-        versionCode = 151
-        versionName = "1.5.1"
+        versionCode = 160
+        versionName = "1.6.0"
     }
 
     buildTypes {

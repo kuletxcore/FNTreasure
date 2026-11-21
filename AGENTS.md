@@ -36,6 +36,8 @@ Guidance for LLM coding agents (including Claude) working on **Fortnite Chest Co
 - **CI & Repo Hygiene**:
   - `.github/workflows/build.yml` runs Android CI on `ubuntu-latest` (JDK 21 + Android SDK + Gradle `9.3.1`), executing `gradle :app:testDebugUnitTest` and `gradle :app:assembleDebug` (and release APK/AAB packaging on `v*` tags).
   - `.gitignore` excludes `.gradle/`, `.kotlin/`, `**/build/`, `local.properties`, `*.jks`, `*.keystore`, and `*.apk`/`*.aab` while preserving `debug.keystore.base64` if used.
+- **Gemini in AI Studio**: `AISTUDIO_INSTRUCTIONS.md` holds the custom instructions pasted into the AI Studio project; keep it in step with this file.
+- **Releases**: push a `v*` tag; CI attaches the APK with `RELEASE_NOTES.md` as the release text.
 - **Testing**: Do not write `androidTest/` instrumented tests if no emulator/ADB is available; use JUnit / Robolectric JVM tests under `app/src/test/java/com/example/` (`gradle :app:testDebugUnitTest`).
 
 ---
