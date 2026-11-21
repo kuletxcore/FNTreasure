@@ -13,8 +13,8 @@ android {
         applicationId = "com.kuletx.forttreasure"
         minSdk = 26
         targetSdk = 36
-        versionCode = 161
-        versionName = "1.6.1"
+        versionCode = 162
+        versionName = "1.6.2"
     }
 
     // AI Studio decodes debug.keystore.base64 into debug.keystore before building: debug builds then use that key.
@@ -85,7 +85,6 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     implementation(libs.androidx.datastore.preferences)
-    // implementation(libs.androidx.documentfile)
     implementation(libs.okhttp)
     implementation(libs.coil.compose)
 

@@ -1,6 +1,10 @@
 **English** · Download **`com.kuletx.forttreasure-*.apk`** below and open it on your phone (allow installing from your browser or file manager if Android asks). Fortnite on Android records no replays, so you count chests with the floating counter while you play.
 
-**What's new in 1.6.1**
+**What's new in 1.6.2**
+- **No more replay folder scanning**: Fortnite on Android records no replays, so the option is gone. Importing and exporting data.json with the Windows app still works
+- Internal code clean-up (package namespace `com.kuletx.forttreasure`); installs over 1.6.1 and keeps your data
+
+**In 1.6.1**
 - **Signed with the app's own key**: from this version on, each update installs over the previous one and keeps your matches and settings. Coming from 1.6.0? Uninstall it once first (it was signed with a temporary key)
 - Debug builds from AI Studio keep their own key
 
@@ -17,7 +21,11 @@ An update keeps your data only if every APK is signed with the same key: see the
 
 **Français** · Télécharge **`com.kuletx.forttreasure-*.apk`** ci-dessous et ouvre-le sur ton téléphone (autorise l'installation depuis ton navigateur ou ton gestionnaire de fichiers si Android le demande). Fortnite sur Android n'enregistre pas de rediffusions : tu comptes les coffres avec le compteur flottant pendant que tu joues.
 
-**Nouveautés de la 1.6.1**
+**Nouveautés de la 1.6.2**
+- **Plus de recherche de dossier de rediffusions** : Fortnite sur Android n'en enregistre pas, l'option est donc retirée. L'import et l'export de data.json avec l'app Windows marchent toujours
+- Nettoyage interne du code (espace de noms `com.kuletx.forttreasure`) ; s'installe par-dessus la 1.6.1 et garde tes données
+
+**Dans la 1.6.1**
 - **Signée avec la clé de l'app** : à partir de cette version, chaque mise à jour s'installe par-dessus la précédente et garde tes parties et tes réglages. Tu viens de la 1.6.0 ? Désinstalle-la une fois avant (elle était signée avec une clé temporaire)
 - Les versions de test d'AI Studio gardent leur propre clé
 
@@ -34,7 +42,11 @@ Une mise à jour ne garde tes données que si chaque APK est signé avec la mêm
 
 **Español** · Descarga **`com.kuletx.forttreasure-*.apk`** abajo y ábrelo en tu teléfono (permite instalar desde tu navegador o gestor de archivos si Android lo pide). Fortnite en Android no graba repeticiones: cuentas los cofres con el contador flotante mientras juegas.
 
-**Novedades de la 1.6.1**
+**Novedades de la 1.6.2**
+- **Ya no se buscan carpetas de repeticiones**: Fortnite en Android no las graba, así que se quitó la opción. Importar y exportar data.json con la app de Windows sigue funcionando
+- Limpieza interna del código (espacio de nombres `com.kuletx.forttreasure`); se instala encima de la 1.6.1 y conserva tus datos
+
+**En la 1.6.1**
 - **Firmada con la clave de la app**: a partir de esta versión, cada actualización se instala encima de la anterior y conserva tus partidas y ajustes. ¿Vienes de la 1.6.0? Desinstálala una vez antes (estaba firmada con una clave temporal)
 - Las versiones de prueba de AI Studio mantienen su propia clave
 
