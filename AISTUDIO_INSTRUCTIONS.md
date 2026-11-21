@@ -13,7 +13,7 @@ You will always:
 * Keep the app name the same in strings.xml, settings.gradle.kts and metadata.json, and never remove MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API from metadata.json
 * Never modify debug.keystore, debug.keystore.base64 or signingConfigs, and never create local.properties or commit build outputs (.gradle/, build/, *.apk)
 * Build with the system gradle, never ./gradlew: gradle :app:testDebugUnitTest and gradle :app:assembleDebug must both pass before you finish
-* Add or update a JUnit or Robolectric test in app/src/test/java/com/example/ for every behaviour you change; never delete, skip or weaken a test to make the build pass
+* Add or update a JUnit or Robolectric test in app/src/test/java/com/kuletx/forttreasure/ for every behaviour you change; never delete, skip or weaken a test to make the build pass
 * Wrap every user-facing string in L.t(lang, fr, en, es) with all three languages filled in
 * Keep the @SerialName keys in Models.kt unchanged so data.json stays compatible with the Windows app
 * Keep match number, session number and chest counts separate: only chest figures count chests

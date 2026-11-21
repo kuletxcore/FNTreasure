@@ -8,7 +8,7 @@ Guidance for LLM coding agents (including Claude) working on **Fortnite Chest Co
 
 - **Base Repository**: [`https://github.com/kuletxcore/Fortnite-ChestCounter/`](https://github.com/kuletxcore/Fortnite-ChestCounter/) (forked from [`LED-N/Fortnite-ChestCounter`](https://github.com/LED-N/Fortnite-ChestCounter)), rewritten from the Windows/.NET C# desktop app into a native **Android** application using **Kotlin**, **Jetpack Compose (Material 3)**, **Room**, and **Preferences DataStore**.
 - **Android Application Package (`applicationId`)**: **`com.kuletx.forttreasure`** (configured in `app/build.gradle.kts`).
-  - **Code Namespace (`namespace`)**: **`com.example`** (directory tree `app/src/main/java/com/example/`, `R` class package `com.example.R`). Keep `namespace = "com.example"` unchanged when building with this codebase unless migrating every Kotlin `package` statement, import, and manifest relative class path together.
+  - **Code Namespace (`namespace`)**: **`com.kuletx.forttreasure`**, the same as the package (directory tree `app/src/main/java/com/kuletx/forttreasure/`, `R` class `com.kuletx.forttreasure.R`). Every Kotlin `package` and import uses it; a new file goes under that tree. It was `com.example` up to v1.6.1.
 - **Android Additions Beyond Desktop**:
   - **Fortnite Mobile (`com.epicgames.fortnite`) & `experience_br` support**: Package visibility `<queries>`, install/version detection (`FortniteLauncher`), one-tap deep link to `https://play.fn.gg/island/experience_br`, and playlist matching for `experience_br` / `Playlist_experience_br`.
   - **Live Match & Session State (`LiveMatchState`, `LiveMatchSessionCard`, `OverlayModel`)**: Tracks **Match #** (`matchNumber`), **Session #** (`sessionNumber`), **chests in current match** (`liveMatch.chests`), **session chests**, and **picked treasures** (`liveMatch.treasures`) independently so chests opened (e.g. `9`, `15`) never overwrite `Match 1 · Session 1`.
@@ -38,7 +38,7 @@ Guidance for LLM coding agents (including Claude) working on **Fortnite Chest Co
   - `.gitignore` excludes `.gradle/`, `.kotlin/`, `**/build/`, `local.properties`, `*.jks`, `*.keystore`, and `*.apk`/`*.aab` while preserving `debug.keystore.base64` if used.
 - **Gemini + Claude**: see `docs/COLLABORATION.md` (who does what, branches, handoff, releases). `AISTUDIO_INSTRUCTIONS.md` holds the custom instructions pasted into AI Studio; keep it in step with this file.
 - **Releases**: run the Android CI workflow with the `release` input (e.g. `v1.6.0`), or push a `v*` tag; CI publishes the APK with `RELEASE_NOTES.md` as the release text.
-- **Testing**: Do not write `androidTest/` instrumented tests if no emulator/ADB is available; use JUnit / Robolectric JVM tests under `app/src/test/java/com/example/` (`gradle :app:testDebugUnitTest`).
+- **Testing**: Do not write `androidTest/` instrumented tests if no emulator/ADB is available; use JUnit / Robolectric JVM tests under `app/src/test/java/com/kuletx/forttreasure/` (`gradle :app:testDebugUnitTest`).
 
 ---
 
@@ -148,7 +148,7 @@ Follow these exact steps when building a signed release APK or Play Store AAB fo
 
 ---
 
-## 4. Architecture & File Map (`app/src/main/java/com/example/`)
+## 4. Architecture & File Map (`app/src/main/java/com/kuletx/forttreasure/`)
 
 - **`MainActivity.kt`**: Edge-to-edge `ComponentActivity`, SAF document launchers (`.replay`, folder tree, `data.json`, CSV/JSON/HTML export), `ON_RESUME` lifecycle refresh for `canDrawOverlays` and `FortniteLauncher`.
 - **`domain/`** (Pure Kotlin business logic & DTOs):
@@ -166,7 +166,7 @@ Follow these exact steps when building a signed release APK or Play Store AAB fo
     - `AppDatabase.kt`, `Entities.kt`, `Daos.kt`, `ChestCounterRepository.kt` (includes `incrementLiveChest`, `addLiveTreasure`, `removeLiveTreasure`, `finishLiveMatch`, `resetLiveMatch`, `startNewSession`, `updateMatchDetails`), `SettingsRepository.kt` (Preferences DataStore + `liveMatchFlow` + `sessionNumber`).
 - **`overlay/`**:
   - `FloatingOverlayService.kt`: `OverlayPermissionHelper` + `specialUse` Foreground Service + `WindowManager` `TYPE_APPLICATION_OVERLAY` draggable interactive pill observing `AppContainer` Flows (`+1`, `★` inline Treasure Picker, `■` finish match, `👁` compact toggle, `↻` undo/reset/new session drawer + `runningFlow` synced to `MainViewModel`).
-- **`test/`** (`app/src/test/java/com/example/`):
+- **`test/`** (`app/src/test/java/com/kuletx/forttreasure/`):
   - `domain/OverlayModelTest.kt`, `domain/IslandLootOddsAndCatalogTest.kt`, `domain/GameModesAndReportTest.kt`, and Robolectric `data/LiveMatchRepositoryTest.kt`.
 - **`ui/`**:
   - `MainViewModel.kt`: Single source of truth (`StateFlow<MainUiState>`) backed by `AppContainer`, ticker for countdowns, catalog sync, import/export, live match & session actions.

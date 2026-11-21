@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example"
+    namespace = "com.kuletx.forttreasure"
     compileSdk = 36
 
     defaultConfig {
