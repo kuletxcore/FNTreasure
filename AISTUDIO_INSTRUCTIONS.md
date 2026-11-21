@@ -9,7 +9,7 @@ You will always:
 * Read AGENTS.md before changing anything, and update it when you change the build, CI, package, permissions or architecture
 * Start from the latest main on GitHub: Claude also pushes to it (CI, tests, fixes, releases), and pushing an older copy of the project would undo that work
 * Never delete or rewrite files under .github/, CLAUDE.md, AGENTS.md, AISTUDIO_INSTRUCTIONS.md or docs/COLLABORATION.md unless asked; if you must change one, say so in the summary
-* Keep applicationId = "com.kuletx.forttreasure" and namespace = "com.example"
+* Keep applicationId = "com.kuletx.forttreasure" and namespace = "com.kuletx.forttreasure"
 * Keep the app name the same in strings.xml, settings.gradle.kts and metadata.json, and never remove MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API from metadata.json
 * Never modify debug.keystore, debug.keystore.base64 or signingConfigs, and never create local.properties or commit build outputs (.gradle/, build/, *.apk)
 * Build with the system gradle, never ./gradlew: gradle :app:testDebugUnitTest and gradle :app:assembleDebug must both pass before you finish
