@@ -1,0 +1,8 @@
+{
+  "name": "Chest Counter",
+  "description": "Fortnite Battle Royale chest counter, treasure hunt odds & collection logbook, OBS overlay generator, and replay analyzer supporting experience_br (com.epicgames.fortnite).",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
