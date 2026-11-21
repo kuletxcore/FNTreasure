@@ -1,14 +1,20 @@
 package com.example.overlay
 
 import android.annotation.SuppressLint
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.util.TypedValue
@@ -19,6 +25,10 @@ import android.view.WindowManager
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
+import com.example.MainActivity
+import com.example.R
 import com.example.data.local.AppContainer
 import com.example.data.local.ChestCounterRepository
 import com.example.domain.AppConfig
@@ -34,6 +44,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -85,28 +98,144 @@ class FloatingOverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         repo = AppContainer.repository(applicationContext)
+        ensureNotificationChannel()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!OverlayPermissionHelper.canDrawOverlays(this)) {
-            isRunning = false
-            stopSelf()
+        if (intent?.action == ACTION_STOP) {
+            stopOverlayService()
             return START_NOT_STICKY
         }
 
-        if (intent?.action == ACTION_STOP) {
-            removeOverlay()
-            isRunning = false
-            stopSelf()
+        if (!OverlayPermissionHelper.canDrawOverlays(this)) {
+            stopOverlayService()
             return START_NOT_STICKY
+        }
+
+        // Immediately promote to a Foreground Service so Android keeps the overlay alive during gameplay
+        promoteToForeground()
+
+        if (intent?.action == ACTION_INCREMENT_CHEST) {
+            serviceScope.launch {
+                repo.incrementLiveChest(1, currentConfig.language)
+            }
         }
 
         isRunning = true
+        _runningFlow.value = true
         ensureObserving()
         renderOverlay()
         return START_STICKY
+    }
+
+    private fun stopOverlayService() {
+        removeOverlay()
+        isRunning = false
+        _runningFlow.value = false
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
+    private fun ensureNotificationChannel() {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (nm.getNotificationChannel(CHANNEL_ID) == null) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Chest Counter Overlay",
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = "Keeps the floating chest counter active above Fortnite Mobile"
+                setShowBadge(false)
+            }
+            nm.createNotificationChannel(channel)
+        }
+    }
+
+    private fun promoteToForeground() {
+        ensureNotificationChannel()
+        val notification = buildNotification()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
+    private fun updateNotification() {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(NOTIFICATION_ID, buildNotification())
+    }
+
+    private fun buildNotification(): Notification {
+        val lang = currentConfig.language
+        val ov = currentView
+        val live = currentLive
+
+        val title = if (live.active) {
+            "${L.t(lang, "Partie", "Match", "Partida")} ${ov.matchNumber} · ${L.t(lang, "Session", "Session", "Sesión")} ${ov.sessionNumber}"
+        } else {
+            "${L.t(lang, "Prêt : Partie", "Ready: Match", "Listo: Partida")} ${ov.matchNumber} · ${L.t(lang, "Session", "Session", "Sesión")} ${ov.sessionNumber}"
+        }
+
+        val text = if (live.active) {
+            "${ov.liveChests} ${L.t(lang, "coffres", "chests", "cofres")} · ${L.t(lang, "Session", "Session", "Sesión")}: ${ov.session} · ★ ${ov.treasures}"
+        } else {
+            "${L.t(lang, "Dernière", "Last", "Última")}: ${ov.last ?: "0"} · ${L.t(lang, "Session", "Session", "Sesión")}: ${ov.session} · ★ ${ov.treasures}"
+        }
+
+        val openAppIntent = PendingIntent.getActivity(
+            this,
+            100,
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val plusOneIntent = PendingIntent.getService(
+            this,
+            101,
+            Intent(this, FloatingOverlayService::class.java).apply {
+                action = ACTION_INCREMENT_CHEST
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val stopIntent = PendingIntent.getService(
+            this,
+            102,
+            Intent(this, FloatingOverlayService::class.java).apply {
+                action = ACTION_STOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(openAppIntent)
+            .addAction(
+                0,
+                L.t(lang, "+1 coffre", "+1 chest", "+1 cofre"),
+                plusOneIntent,
+            )
+            .addAction(
+                0,
+                L.t(lang, "Arrêter", "Stop", "Detener"),
+                stopIntent,
+            )
+            .build()
     }
 
     private fun ensureObserving() {
@@ -141,6 +270,7 @@ class FloatingOverlayService : Service() {
                 currentPlayerName = snap.playerName
                 currentView = snap.overlay
                 if (isRunning) {
+                    updateNotification()
                     renderOverlay()
                 }
             }
@@ -189,13 +319,11 @@ class FloatingOverlayService : Service() {
             }
         }
 
-        // Main horizontal HUD pill row
         val mainRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        // Left stats column
         val statsCol = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, 0, dp(10f), 0)
@@ -300,7 +428,6 @@ class FloatingOverlayService : Service() {
             }
         }
 
-        // +1 Chest button (warm gold)
         mainRow.addView(
             createCircleButton(
                 label = "+1",
@@ -318,7 +445,6 @@ class FloatingOverlayService : Service() {
         )
 
         if (!compactMode) {
-            // ★ Treasure Picker toggle button (purple)
             mainRow.addView(
                 createCircleButton(
                     label = "★",
@@ -335,7 +461,6 @@ class FloatingOverlayService : Service() {
                 }
             )
 
-            // ■ Finish Match button (coral/orange, visible while active)
             if (live.active || live.chests > 0 || live.treasures.isNotEmpty()) {
                 mainRow.addView(
                     createCircleButton(
@@ -357,7 +482,6 @@ class FloatingOverlayService : Service() {
             }
         }
 
-        // 👁 Compact toggle button
         mainRow.addView(
             createCircleButton(
                 label = if (compactMode) "◉" else "👁",
@@ -378,24 +502,28 @@ class FloatingOverlayService : Service() {
         )
 
         if (!compactMode) {
-            // ↻ Undo / Session actions toggle
-            mainRow.addView(
-                createCircleButton(
-                    label = "↻",
-                    bgColor = if (actionsMenuOpen) Color.rgb(52, 62, 86) else Color.argb(190, 28, 34, 48),
-                    strokeColor = Color.rgb(201, 162, 79),
-                    textColor = Color.rgb(239, 226, 196),
-                    sizeDp = 38f,
-                    textSp = 15f,
-                    contentDesc = L.t(lang, "Options partie / session", "Match & session options", "Opciones de partida / sesión"),
-                ) {
-                    actionsMenuOpen = !actionsMenuOpen
-                    treasurePickerOpen = false
-                    renderOverlay()
+            val resetBtn = createCircleButton(
+                label = "↻",
+                bgColor = if (actionsMenuOpen) Color.rgb(52, 62, 86) else Color.argb(190, 28, 34, 48),
+                strokeColor = Color.rgb(201, 162, 79),
+                textColor = Color.rgb(239, 226, 196),
+                sizeDp = 38f,
+                textSp = 15f,
+                contentDesc = L.t(lang, "Options partie / session (maintenir pour réinitialiser)", "Match & session options (hold to reset)", "Opciones de partida / sesión (mantén para reiniciar)"),
+            ) {
+                actionsMenuOpen = !actionsMenuOpen
+                treasurePickerOpen = false
+                renderOverlay()
+            }
+            resetBtn.setOnLongClickListener {
+                serviceScope.launch {
+                    repo.resetLiveMatch(lang)
+                    actionsMenuOpen = false
                 }
-            )
+                true
+            }
+            mainRow.addView(resetBtn)
 
-            // × Close overlay button
             val closeTv = TextView(this).apply {
                 text = "✕"
                 contentDescription = L.t(lang, "Fermer l'overlay", "Close overlay", "Cerrar overlay")
@@ -405,9 +533,7 @@ class FloatingOverlayService : Service() {
                 gravity = Gravity.CENTER
                 setPadding(dp(8f), dp(4f), dp(2f), dp(4f))
                 setOnClickListener {
-                    removeOverlay()
-                    isRunning = false
-                    stopSelf()
+                    stopOverlayService()
                 }
             }
             mainRow.addView(closeTv)
@@ -415,7 +541,6 @@ class FloatingOverlayService : Service() {
 
         root.addView(mainRow)
 
-        // Expanded Treasure Picker drawer
         if (treasurePickerOpen && !compactMode) {
             val pickerHeader = TextView(this).apply {
                 text = L.t(
@@ -509,7 +634,6 @@ class FloatingOverlayService : Service() {
             }
         }
 
-        // Expanded Match/Session Undo & Reset Drawer
         if (actionsMenuOpen && !compactMode) {
             val actionRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -630,22 +754,30 @@ class FloatingOverlayService : Service() {
         serviceScope.cancel()
         removeOverlay()
         isRunning = false
+        _runningFlow.value = false
         super.onDestroy()
     }
 
     companion object {
+        private const val CHANNEL_ID = "overlay_fgs"
+        private const val NOTIFICATION_ID = 4301
+
+        private val _runningFlow = MutableStateFlow(false)
+        val runningFlow: StateFlow<Boolean> = _runningFlow.asStateFlow()
+
         @Volatile
         var isRunning: Boolean = false
             private set
 
         const val ACTION_START_OR_UPDATE = "com.example.overlay.START_OR_UPDATE"
+        const val ACTION_INCREMENT_CHEST = "com.example.overlay.INCREMENT_CHEST"
         const val ACTION_STOP = "com.example.overlay.STOP"
 
         fun startOrUpdate(context: Context) {
             val intent = Intent(context, FloatingOverlayService::class.java).apply {
                 action = ACTION_START_OR_UPDATE
             }
-            context.startService(intent)
+            ContextCompat.startForegroundService(context, intent)
         }
 
         fun stop(context: Context) {

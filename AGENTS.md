@@ -12,7 +12,7 @@ Guidance for LLM coding agents (including Claude) working on **Fortnite Chest Co
 - **Android Additions Beyond Desktop**:
   - **Fortnite Mobile (`com.epicgames.fortnite`) & `experience_br` support**: Package visibility `<queries>`, install/version detection (`FortniteLauncher`), one-tap deep link to `https://play.fn.gg/island/experience_br`, and playlist matching for `experience_br` / `Playlist_experience_br`.
   - **Live Match & Session State (`LiveMatchState`, `LiveMatchSessionCard`, `OverlayModel`)**: Tracks **Match #** (`matchNumber`), **Session #** (`sessionNumber`), **chests in current match** (`liveMatch.chests`), **session chests**, and **picked treasures** (`liveMatch.treasures`) independently so chests opened (e.g. `9`, `15`) never overwrite `Match 1 · Session 1`.
-  - **Interactive Floating Overlay (`SYSTEM_ALERT_WINDOW`)**: Draggable `TYPE_APPLICATION_OVERLAY` window (`FloatingOverlayService`) synced in real time via `AppContainer` Flows with `+1` chest, `★` inline **Treasure Picker** strip, `■` finish & save match, `👁` compact mode, and `↻` undo / reset match / new session menu, plus `Settings.ACTION_MANAGE_OVERLAY_PERMISSION` (`package:com.kuletx.forttreasure`) and `ON_RESUME` status refresh.
+  - **Interactive Floating Overlay (`SYSTEM_ALERT_WINDOW` + Foreground Service)**: Draggable `TYPE_APPLICATION_OVERLAY` window (`FloatingOverlayService`) running as an Android 14+ `specialUse` Foreground Service (`PROPERTY_SPECIAL_USE_FGS_SUBTYPE`, ongoing notification with live Match/Session/Chest status + `+1 chest` / `Stop` actions, `POST_NOTIFICATIONS` prompt on API 33+), synced in real time via `AppContainer` Flows with `+1` chest, `★` inline **Treasure Picker** strip, `■` finish & save match, `👁` compact mode, and `↻` undo / reset match / new session menu (long-press `↻` for quick match reset), plus `Settings.ACTION_MANAGE_OVERLAY_PERMISSION` (`package:com.kuletx.forttreasure`) and `ON_RESUME` status refresh.
   - **Treasure Picker (`TreasurePicker.kt`)**: Allows picking weekly prizes (including Jam Track, Pickaxe/Back Bling, Car Decal, Loading Screen, Gold Outfit), Pirate Shop Access, and Gizmos (Gizmo any, Golden firework, Portable extractor, Sprite locator, Lucky locator, Extraction accelerator) both live and for any recorded match in the Match Log / Report (`MatchDetailDialog`).
   - **Island Loot Odds Calculator** (`IslandLootOdds`, `LootOddsCalculatorCard`): Simulates single-chest and cumulative `N`-chest percentage odds, expected drops, Treasure Hour multipliers, and `25%`/`50%`/`75%`/`90%` chest/match milestones from live `content.json` drop rates or custom `%` rates.
   - **Quick-Switch FAB Menu** (`QuickSwitchFabMenu`): Expandable Material 3 speed-dial FAB menu toggling between **Loot Tracker**, **Chest Odds Calculator**, and **Logbook** views.
@@ -33,7 +33,10 @@ Guidance for LLM coding agents (including Claude) working on **Fortnite Chest Co
   - Always use system `gradle` (`gradle :app:assembleDebug`, `gradle :app:bundleRelease`, `gradle :app:testDebugUnitTest`). **Never** run `./gradlew` or `gradlew` in environments without a Gradle wrapper.
   - **Never** create, edit, or use `local.properties` (`ANDROID_SDK_ROOT` is provided via environment variable).
   - Keep the app name synchronized across `app/src/main/res/values/strings.xml`, `settings.gradle.kts`, and `metadata.json`. **Never** remove `MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API` from `metadata.json`.
-- **Testing**: Do not write `androidTest/` instrumented tests if no emulator/ADB is available; use JUnit / Robolectric JVM tests (`gradle :app:testDebugUnitTest`) instead.
+- **CI & Repo Hygiene**:
+  - `.github/workflows/build.yml` runs Android CI on `ubuntu-latest` (JDK 21 + Android SDK + Gradle `9.3.1`), executing `gradle :app:testDebugUnitTest` and `gradle :app:assembleDebug` (and release APK/AAB packaging on `v*` tags).
+  - `.gitignore` excludes `.gradle/`, `.kotlin/`, `**/build/`, `local.properties`, `*.jks`, `*.keystore`, and `*.apk`/`*.aab` while preserving `debug.keystore.base64` if used.
+- **Testing**: Do not write `androidTest/` instrumented tests if no emulator/ADB is available; use JUnit / Robolectric JVM tests under `app/src/test/java/com/example/` (`gradle :app:testDebugUnitTest`).
 
 ---
 
@@ -160,7 +163,9 @@ Follow these exact steps when building a signed release APK or Play Store AAB fo
     - `AppContainer.kt`: Process-wide singleton providing one shared `AppDatabase`, `SettingsRepository`, and `ChestCounterRepository` for both `MainViewModel` and `FloatingOverlayService`.
     - `AppDatabase.kt`, `Entities.kt`, `Daos.kt`, `ChestCounterRepository.kt` (includes `incrementLiveChest`, `addLiveTreasure`, `removeLiveTreasure`, `finishLiveMatch`, `resetLiveMatch`, `startNewSession`, `updateMatchDetails`), `SettingsRepository.kt` (Preferences DataStore + `liveMatchFlow` + `sessionNumber`).
 - **`overlay/`**:
-  - `FloatingOverlayService.kt`: `OverlayPermissionHelper` + `WindowManager` `TYPE_APPLICATION_OVERLAY` draggable interactive pill observing `AppContainer` Flows (`+1`, `★` inline Treasure Picker, `■` finish match, `👁` compact toggle, `↻` undo/reset/new session drawer).
+  - `FloatingOverlayService.kt`: `OverlayPermissionHelper` + `specialUse` Foreground Service + `WindowManager` `TYPE_APPLICATION_OVERLAY` draggable interactive pill observing `AppContainer` Flows (`+1`, `★` inline Treasure Picker, `■` finish match, `👁` compact toggle, `↻` undo/reset/new session drawer + `runningFlow` synced to `MainViewModel`).
+- **`test/`** (`app/src/test/java/com/example/`):
+  - `domain/OverlayModelTest.kt`, `domain/IslandLootOddsAndCatalogTest.kt`, `domain/GameModesAndReportTest.kt`, and Robolectric `data/LiveMatchRepositoryTest.kt`.
 - **`ui/`**:
   - `MainViewModel.kt`: Single source of truth (`StateFlow<MainUiState>`) backed by `AppContainer`, ticker for countdowns, catalog sync, import/export, live match & session actions.
   - `AppShell.kt`: Adaptive `NavigationBar` (compact) / `NavigationRail` (medium/expanded) for 5 `AppTab`s (`HOME`, `REPORT`, `OVERLAY`, `SETTINGS`, `HELP`) + `QuickSwitchFabMenu` switching `QuickViewMode` (`LOGBOOK`, `LOOT_TRACKER`, `CHEST_ODDS_CALCULATOR`), with `BackHandler` and dismiss scrim.
@@ -185,4 +190,4 @@ Follow these exact steps when building a signed release APK or Play Store AAB fo
 - **Design ("Logbook" Theme)**: Preserve the dark-sea (`NightSeaBg`) and warm parchment (`ParchmentCard`, `HeroChestBg`, `AccentGold`, `TealAccent`) palette. Avoid generic gray/material defaults.
 - **Localization**: Wrap all user-facing strings in `L.t(lang, fr, en, es)` so French, English, and Spanish remain complete.
 - **Accessibility & Testing**: Attach `Modifier.testTag("snake_case")` to new interactive controls, set meaningful `contentDescription` on non-decorative icons/images, keep touch targets `>= 48.dp`, and handle `BackHandler` on secondary views/overlays.
-- **Permissions**: File import/export uses Storage Access Framework (`OpenMultipleDocuments`, `OpenDocumentTree`, `OpenDocument`, `CreateDocument`). Do not add `READ_EXTERNAL_STORAGE` or `MANAGE_EXTERNAL_STORAGE`. Only `INTERNET` and `SYSTEM_ALERT_WINDOW` permissions are declared.
+- **Permissions**: File import/export uses Storage Access Framework (`OpenMultipleDocuments`, `OpenDocumentTree`, `OpenDocument`, `CreateDocument`). Do not add `READ_EXTERNAL_STORAGE` or `MANAGE_EXTERNAL_STORAGE`. Declared permissions are `INTERNET`, `SYSTEM_ALERT_WINDOW`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE`, and `POST_NOTIFICATIONS` (requested at runtime on API 33+).

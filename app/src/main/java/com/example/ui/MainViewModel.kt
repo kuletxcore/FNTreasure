@@ -77,9 +77,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val catalogRevFlow = MutableStateFlow(1)
     private val snackbarFlow = MutableStateFlow<String?>(null)
     private val fortniteStatusFlow = MutableStateFlow(FortniteLauncher.status(application))
-    private val overlayPermFlow = MutableStateFlow(
-        OverlayPermissionHelper.canDrawOverlays(application) to FloatingOverlayService.isRunning
-    )
+    private val overlayPermFlow = MutableStateFlow(OverlayPermissionHelper.canDrawOverlays(application))
 
     private val tickerFlow = flow {
         while (true) {
@@ -126,18 +124,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ) { prog, now, fn, preview, est ->
         AuxiliaryState(prog, now, fn, preview, est, "", catalogRevFlow.value, null, false, false)
     }.combine(
-        combine(errorLogFlow, catalogRevFlow, snackbarFlow, overlayPermFlow) { err, rev, sb, perm ->
-            listOf(err, rev, sb, perm)
+        combine(
+            errorLogFlow,
+            catalogRevFlow,
+            snackbarFlow,
+            overlayPermFlow,
+            FloatingOverlayService.runningFlow,
+        ) { err, rev, sb, perm, running ->
+            listOf(err, rev, sb, perm, running)
         }
     ) { a, b ->
-        @Suppress("UNCHECKED_CAST")
-        val perm = b[3] as Pair<Boolean, Boolean>
         a.copy(
             errorLog = b[0] as String,
             catalogRev = b[1] as Int,
             snackbar = b[2] as String?,
-            canDrawOverlays = perm.first,
-            floatingActive = perm.second,
+            canDrawOverlays = b[3] as Boolean,
+            floatingActive = b[4] as Boolean,
         )
     }
 
@@ -190,7 +192,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             isSystem24Hour = sys24,
             snackbarMessage = aux.snackbar,
             canDrawOverlays = aux.canDrawOverlays,
-            floatingOverlayActive = FloatingOverlayService.isRunning || aux.floatingActive,
+            floatingOverlayActive = aux.floatingActive,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -205,7 +207,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshOverlayPermissionState() {
         val ctx = getApplication<Application>()
-        overlayPermFlow.value = OverlayPermissionHelper.canDrawOverlays(ctx) to FloatingOverlayService.isRunning
+        overlayPermFlow.value = OverlayPermissionHelper.canDrawOverlays(ctx)
     }
 
     fun startOrUpdateFloatingOverlay(overlayView: OverlayView) {
@@ -215,13 +217,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         FloatingOverlayService.startOrUpdate(ctx)
-        overlayPermFlow.value = true to true
+        overlayPermFlow.value = true
     }
 
     fun stopFloatingOverlay() {
         val ctx = getApplication<Application>()
         FloatingOverlayService.stop(ctx)
-        overlayPermFlow.value = OverlayPermissionHelper.canDrawOverlays(ctx) to false
+        overlayPermFlow.value = OverlayPermissionHelper.canDrawOverlays(ctx)
     }
 
     fun refreshFortniteStatus() {

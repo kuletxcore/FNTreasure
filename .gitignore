@@ -1,3 +1,27 @@
+# Gradle & Android build outputs
+.gradle/
+.kotlin/
+build/
+**/build/
+.build-outputs/
+*.apk
+*.ap_
+*.aab
+*.dex
+local.properties
+.cxx/
+
+# Signing keys (keep debug.keystore.base64 if used by CI/environment)
+*.jks
+*.keystore
+!debug.keystore.base64
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Legacy .NET / Replay debug artifacts
 bin/
 obj/
 dist/
@@ -5,5 +29,4 @@ dist-*/
 *.user
 .vs/
 *.replay
-# debug dumps of the parser (ParseMode.Debug)
 cmds/

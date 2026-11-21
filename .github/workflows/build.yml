@@ -1,28 +1,93 @@
-name: Build ChestCounter.exe
+name: Android CI
+
 on:
   push:
     branches: ['**']
     tags: ['v*']
+  pull_request:
   workflow_dispatch:
+
 permissions:
   contents: write
+
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
         with:
-          dotnet-version: '10.0.x'
-      - name: Publish
-        run: dotnet publish src/ChestCounter/ChestCounter.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -p:DebugType=none -o dist
-      - uses: actions/upload-artifact@v4
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
         with:
-          name: ChestCounter
-          path: dist/ChestCounter.exe
-      - name: Attach to the release (tags only)
+          gradle-version: '9.3.1'
+
+      - name: Decode debug keystore if present
+        run: |
+          if [ -f debug.keystore.base64 ] && [ ! -f debug.keystore ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          fi
+
+      - name: Run unit & Robolectric tests
+        run: gradle :app:testDebugUnitTest --stacktrace
+
+      - name: Build Debug APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: app/build/reports/tests/testDebugUnitTest/
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Build Release APK & AAB (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: gradle :app:assembleRelease :app:bundleRelease --stacktrace
+
+      - name: Sign & attach release artifacts (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          mkdir -p release-dist
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > release-keystore.jks
+            APKSIGNER=$(find "$ANDROID_SDK_ROOT/build-tools" -name apksigner | sort -V | tail -n 1)
+            ZIPALIGN=$(find "$ANDROID_SDK_ROOT/build-tools" -name zipalign | sort -V | tail -n 1)
+            "$ZIPALIGN" -v -p 4 app/build/outputs/apk/release/app-release-unsigned.apk release-dist/app-release-aligned.apk
+            "$APKSIGNER" sign \
+              --ks release-keystore.jks \
+              --ks-key-alias "$ANDROID_KEY_ALIAS" \
+              --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+              --key-pass env:ANDROID_KEY_PASSWORD \
+              --out release-dist/com.kuletx.forttreasure-release.apk \
+              release-dist/app-release-aligned.apk
+            rm -f release-dist/app-release-aligned.apk release-keystore.jks
+          else
+            cp app/build/outputs/apk/debug/app-debug.apk release-dist/com.kuletx.forttreasure-debug.apk
+          fi
+
+      - name: Attach release APK to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/ChestCounter.exe
-          body_path: RELEASE_NOTES.md
+          files: release-dist/*.apk
+          generate_release_notes: true

@@ -1,5 +1,10 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -40,11 +45,13 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.example.domain.L
 import com.example.domain.MatchRecordDto
 import com.example.domain.OverlayAppearance
@@ -130,16 +137,11 @@ fun OverlayScreen(
         }
     }
 
-    LaunchedEffect(
-        state.floatingOverlayActive,
-        overlayView,
-        state.config.overlayStyle,
-        state.config.overlaySize,
-        state.config.overlayOpacity,
-    ) {
-        if (state.floatingOverlayActive && state.canDrawOverlays) {
-            onStartFloatingOverlay(overlayView)
-        }
+    val context = LocalContext.current
+    val notificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { _ ->
+        onStartFloatingOverlay(overlayView)
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -213,8 +215,17 @@ fun OverlayScreen(
                             L.t(lang, "Afficher l'overlay flottant", "Show floating overlay", "Mostrar overlay flotante")
                         },
                         onClick = {
-                            if (state.floatingOverlayActive) onStopFloatingOverlay()
-                            else onStartFloatingOverlay(overlayView)
+                            if (state.floatingOverlayActive) {
+                                onStopFloatingOverlay()
+                            } else if (
+                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                                PackageManager.PERMISSION_GRANTED
+                            ) {
+                                notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                onStartFloatingOverlay(overlayView)
+                            }
                         },
                         modifier = Modifier.testTag("toggle_floating_overlay_button"),
                     )
